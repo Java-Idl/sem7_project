@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebHID Report Writer / Probe</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #14171c;
+    --border: #262b33;
+    --accent: #5ec9ff;
+    --ok: #4ade80;
+    --warn: #f59e0b;
+    --danger: #f87171;
+    --text: #dfe4ea;
+    --muted: #7c8798;
+    --mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 32px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); font-size: 12.5px; margin-bottom: 24px; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .panel h2 {
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin-bottom: 14px;
+    font-weight: 600;
+  }
+
+  button {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 9px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    width: 100%;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary { background: var(--accent); color: #06131c; border-color: var(--accent); font-weight: 600; }
+  button.primary:hover { opacity: 0.9; color: #06131c; }
+  button.danger-btn { border-color: var(--danger); color: var(--danger); }
+  button.danger-btn:hover { background: rgba(248,113,113,0.08); }
+  button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .status-line {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 10px;
+    word-break: break-all;
+  }
+  .status-line.connected { color: var(--ok); }
+
+  label { display: block; font-size: 11.5px; color: var(--muted); margin: 12px 0 5px; }
+  input[type="text"], input[type="number"], select {
+    width: 100%;
+    background: #0b0d10;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 8px 10px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12.5px;
+  }
+  select { cursor: pointer; }
+
+  .byte-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px;
+    margin-top: 8px;
+  }
+  .byte-grid input {
+    padding: 6px 2px;
+    text-align: center;
+    font-size: 11px;
+  }
+
+  .btn-row { display: flex; gap: 8px; margin-top: 12px; }
+  .btn-row button { flex: 1; }
+
+  .sweep-row { display: flex; gap: 8px; align-items: end; }
+  .sweep-row > div { flex: 1; }
+
+  .log {
+    background: #070a10;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    height: 640px;
+    overflow-y: auto;
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  .log-line { display: flex; gap: 8px; padding: 2px 0; white-space: pre-wrap; word-break: break-all; }
+  .log-time { color: var(--muted); flex-shrink: 0; }
+  .log-tag { flex-shrink: 0; font-weight: 600; }
+  .log-tag.send { color: var(--accent); }
+  .log-tag.recv { color: var(--ok); }
+  .log-tag.err { color: var(--danger); }
+  .log-tag.info { color: var(--muted); }
+  .log-tag.evt { color: var(--warn); }
+  .log-tag.obs { color: #c084fc; }
+  .log-line.obs-line { background: rgba(192,132,252,0.08); border-radius: 4px; padding: 4px 6px; margin: 2px -6px; }
+
+  .tabs { display: flex; gap: 8px; }
+  .tab-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    background: var(--panel);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 10px 20px;
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+    width: auto;
+  }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--bg);
+    background: var(--bg);
+    border-color: var(--accent);
+  }
+  .tab-btn:hover { color: var(--accent); }
+
+  .quick-note {
+    font-size: 11px;
+    color: var(--muted);
+    background: rgba(94,201,255,0.06);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-top: 10px;
+  }
+</style>
+</head>
+<body>
+
+  <h1>WebHID Report Writer / Probe</h1>
+  <div class="subtitle">Craft and send raw feature/output reports to a connected HID device. Logs every send + any response (feature report readback, or inputreport events fired back).</div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="auto">Automated Flow</button>
+    <button class="tab-btn" data-tab="manual">Manual / Presets</button>
+  </div>
+
+  <div class="panel" style="margin-top:16px;">
+    <h2>Connection (shared across both tabs)</h2>
+    <button class="primary" id="connectBtn">Connect device</button>
+    <div class="status-line" id="statusLine">Not connected</div>
+  </div>
+
+  <!-- ===================== AUTOMATED FLOW TAB ===================== -->
+  <div id="tab-auto" class="tab-content">
+
+    <div class="layout">
+      <div class="left-col">
+
+        <div class="panel">
+          <h2>Camera preview (watch for visible effects)</h2>
+          <div class="quick-note">Opens the device's own video stream via getUserMedia — separate from WebHID, this is the actual image the camera is capturing. Watch this alongside the physical device while the flow runs, in case a report changes exposure, IR-cut, zoom, or frame rate rather than an LED.</div>
+          <video id="camPreview" autoplay playsinline muted style="width:100%; border-radius:8px; margin-top:10px; background:#000; display:block;"></video>
+          <select id="camSelect" style="margin-top:8px;"></select>
+          <div class="btn-row">
+            <button class="primary" id="camStartBtn">Start preview</button>
+            <button class="danger-btn" id="camStopBtn" disabled>Stop preview</button>
+          </div>
+          <div class="status-line" id="camStatus">Preview not started.</div>
+        </div>
+
+        <div class="panel">
+          <h2>Live observation marker</h2>
+          <div class="quick-note">Hit this the moment you see/hear ANY reaction on the physical device while the flow runs. Drops a timestamped marker so you can sync against your video later. The flow keeps running — this doesn't pause it.</div>
+          <input type="text" id="obsNote" placeholder="what did you see? (optional)" style="margin-top:8px;">
+          <button class="primary" id="markObsBtn" style="margin-top:8px;">⚡ Mark observation now</button>
+        </div>
+
+        <div class="panel">
+          <h2>Run the full probe sequence</h2>
+          <div class="quick-note">
+            Runs everything from the manual presets, in order, automatically:<br><br>
+            1. Report 3 sweep (0–10)<br>
+            2. Report 5 all 4 states<br>
+            3. Report 6 read attempt<br>
+            4. Report 6 baseline write<br>
+            5. Report 6 handshake attempts (0xA1, 0x06, 0xFF) — each followed by a retry read<br>
+            6. Report 6 byte[0] sweep 0x00–0x20<br>
+            7. Report 6 byte[0] FULL sweep 0x00–0xFF (skippable)<br><br>
+            Start filming before you click Start. Pause anytime — the flow waits for you.
+          </div>
+          <label>Delay between sends (ms)</label>
+          <input type="number" id="flowDelay" value="1000" min="200">
+          <label style="display:flex; align-items:center; gap:8px; margin-top:12px;">
+            <input type="checkbox" id="flowSkipFullSweep" checked style="width:auto;">
+            Skip full 0x00–0xFF sweep (256 sends, ~4min) — run narrow 0x00–0x20 only
+          </label>
+          <div class="btn-row">
+            <button class="primary" id="flowStartBtn">▶ Start automated flow</button>
+            <button class="danger-btn" id="flowPauseBtn" disabled>⏸ Pause</button>
+          </div>
+          <div class="btn-row">
+            <button id="flowResumeBtn" disabled>▶ Resume</button>
+            <button class="danger-btn" id="flowStopBtn" disabled>■ Stop</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Flow status</h2>
+          <div class="status-line" id="flowStatus">Idle — not started.</div>
+          <div class="quick-note" id="flowStep" style="margin-top:8px;">Waiting to start.</div>
+        </div>
+
+      </div>
+
+      <div class="log" id="logAuto"></div>
+    </div>
+
+  </div>
+
+  <!-- ===================== MANUAL TAB ===================== -->
+  <div id="tab-manual" class="tab-content" style="display:none;">
+
+  <div class="layout">
+
+    <div class="left-col">
+
+      <div class="panel">
+        <h2>Live observation marker</h2>
+        <div class="quick-note">Hit this the moment you see/hear ANY reaction on the physical device while filming. Drops a timestamped marker in the log so you can sync against your video later.</div>
+        <input type="text" id="obsNoteManual" placeholder="what did you see? (optional)" style="margin-top:8px;">
+        <button class="primary" id="markObsBtnManual" style="margin-top:8px;">⚡ Mark observation now</button>
+      </div>
+
+      <div class="panel">
+        <h2>Presets — this device (0x1903:0x8328)</h2>
+        <div class="quick-note">Loads report type, ID, payload and sweep params into the fields below. Doesn't send anything — review then hit Send / Start sweep yourself.</div>
+        <div id="presetList" style="margin-top:10px; display:flex; flex-direction:column; gap:6px;"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Report target</h2>
+        <label>Report type</label>
+        <select id="reportType">
+          <option value="feature-send">sendFeatureReport()</option>
+          <option value="feature-recv">receiveFeatureReport() — read only</option>
+          <option value="output">sendReport() (output report)</option>
+        </select>
+
+        <label>Report ID</label>
+        <input type="number" id="reportId" value="3" min="0" max="255">
+
+        <label>Payload bytes (space or comma separated hex, e.g. "01 00 00")</label>
+        <input type="text" id="payloadHex" placeholder="00 00 00 00 00 00 00 00">
+
+        <label>Byte-grid editor (auto-syncs with field above)</label>
+        <div class="byte-grid" id="byteGrid"></div>
+        <label style="margin-top:8px;">Payload length (bytes)</label>
+        <input type="number" id="payloadLen" value="8" min="1" max="63">
+
+        <div class="btn-row">
+          <button class="primary" id="sendBtn">Send</button>
+          <button id="zeroBtn">Zero fill</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Sweep (auto-probe)</h2>
+        <div class="quick-note">Sends the same report repeatedly, incrementing one byte through a range. Watch the physical device between each send — pause manually if you see a reaction.</div>
+        <label>Byte index to sweep (0-based)</label>
+        <input type="number" id="sweepByteIdx" value="0" min="0">
+        <label>Hold these bytes fixed while sweeping (idx:hex, comma-separated, e.g. "0:a1,2:05")</label>
+        <input type="text" id="sweepHold" placeholder="e.g. 0:a1">
+        <div class="sweep-row">
+          <div>
+            <label>From</label>
+            <input type="number" id="sweepFrom" value="0">
+          </div>
+          <div>
+            <label>To</label>
+            <input type="number" id="sweepTo" value="10">
+          </div>
+          <div>
+            <label>Delay (ms)</label>
+            <input type="number" id="sweepDelay" value="800">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button id="sweepBtn">Start sweep</button>
+          <button class="danger-btn" id="sweepStopBtn" disabled>Stop</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Log</h2>
+        <button id="clearLogBtn">Clear log</button>
+        <button id="exportLogBtn" style="margin-top:8px;">Export log JSON</button>
+      </div>
+
+    </div>
+
+    <div class="log" id="log">
+      <div class="log-line"><span class="log-tag info">[INFO]</span><span>Connect a device, then send reports. All sends and any device-initiated inputreport events will appear here with timestamps.</span></div>
+    </div>
+
+  </div>
+
+  </div><!-- /tab-manual -->
+
+<script>
+  const connectBtn = document.getElementById('connectBtn');
+  const statusLine = document.getElementById('statusLine');
+  const reportType = document.getElementById('reportType');
+  const reportIdInput = document.getElementById('reportId');
+  const payloadHex = document.getElementById('payloadHex');
+  const payloadLen = document.getElementById('payloadLen');
+  const byteGrid = document.getElementById('byteGrid');
+  const sendBtn = document.getElementById('sendBtn');
+  const zeroBtn = document.getElementById('zeroBtn');
+  const sweepByteIdx = document.getElementById('sweepByteIdx');
+  const sweepHold = document.getElementById('sweepHold');
+  const sweepFrom = document.getElementById('sweepFrom');
+  const sweepTo = document.getElementById('sweepTo');
+  const sweepDelay = document.getElementById('sweepDelay');
+  const sweepBtn = document.getElementById('sweepBtn');
+  const sweepStopBtn = document.getElementById('sweepStopBtn');
+  const clearLogBtn = document.getElementById('clearLogBtn');
+  const exportLogBtn = document.getElementById('exportLogBtn');
+  const logEl = document.getElementById('log');
+  const logAutoEl = document.getElementById('logAuto');
+
+  let device = null;
+  let sweeping = false;
+  let logEntries = [];
+
+  function ts() {
+    const d = new Date();
+    return d.toTimeString().split(' ')[0] + '.' + String(d.getMilliseconds()).padStart(3, '0');
+  }
+
+  function line(tag, msg, extraClass) {
+    const html = `<span class="log-time">${ts()}</span><span class="log-tag ${tag}">[${tag.toUpperCase()}]</span><span>${msg}</span>`;
+    [logEl, logAutoEl].forEach(target => {
+      if (!target) return;
+      const row = document.createElement('div');
+      row.className = 'log-line' + (extraClass ? ' ' + extraClass : '');
+      row.innerHTML = html;
+      target.appendChild(row);
+      target.scrollTop = target.scrollHeight;
+    });
+    logEntries.push({time: ts(), tag, msg});
+  }
+
+  // ---------- Tab switching ----------
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-auto').style.display = btn.dataset.tab === 'auto' ? 'block' : 'none';
+      document.getElementById('tab-manual').style.display = btn.dataset.tab === 'manual' ? 'block' : 'none';
+    });
+  });
+
+  function bytesToHexStr(bytes) {
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
+  }
+
+  function parseHexInput(str) {
+    return str.trim().split(/[\s,]+/).filter(s => s.length).map(s => parseInt(s, 16) & 0xff);
+  }
+
+  function syncGridFromHex() {
+    const bytes = parseHexInput(payloadHex.value);
+    payloadLen.value = bytes.length || payloadLen.value;
+    renderByteGrid(bytes);
+  }
+
+  function renderByteGrid(bytes) {
+    const len = parseInt(payloadLen.value) || 8;
+    byteGrid.innerHTML = '';
+    for (let i = 0; i < len; i++) {
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.maxLength = 2;
+      inp.value = (bytes[i] !== undefined ? bytes[i] : 0).toString(16).padStart(2, '0');
+      inp.dataset.idx = i;
+      inp.addEventListener('input', syncHexFromGrid);
+      byteGrid.appendChild(inp);
+    }
+  }
+
+  function syncHexFromGrid() {
+    const inputs = byteGrid.querySelectorAll('input');
+    const bytes = Array.from(inputs).map(i => parseInt(i.value || '0', 16) & 0xff);
+    payloadHex.value = bytesToHexStr(bytes);
+  }
+
+  function getCurrentBytes() {
+    const inputs = byteGrid.querySelectorAll('input');
+    if (inputs.length > 0) {
+      return new Uint8Array(Array.from(inputs).map(i => parseInt(i.value || '0', 16) & 0xff));
+    }
+    return new Uint8Array(parseHexInput(payloadHex.value));
+  }
+
+  payloadHex.addEventListener('change', syncGridFromHex);
+  payloadLen.addEventListener('change', () => renderByteGrid(getCurrentBytes()));
+  zeroBtn.addEventListener('click', () => {
+    payloadHex.value = '';
+    renderByteGrid(new Array(parseInt(payloadLen.value) || 8).fill(0));
+  });
+
+  renderByteGrid(new Array(8).fill(0));
+
+  function wireObsMarker(noteId, btnId) {
+    const noteEl = document.getElementById(noteId);
+    const btnEl = document.getElementById(btnId);
+    if (!noteEl || !btnEl) return;
+    btnEl.addEventListener('click', () => {
+      const note = noteEl.value.trim();
+      line('obs', `⚡ OBSERVED REACTION${note ? ' — ' + note : ' (no note entered)'} — cross-reference against video timestamp ${ts()}`, 'obs-line');
+      noteEl.value = '';
+    });
+  }
+  wireObsMarker('obsNote', 'markObsBtn');
+  wireObsMarker('obsNoteManual', 'markObsBtnManual');
+
+  // ---------- Presets, derived from the recon JSON for 0x1903:0x8328 ----------
+  const presets = [
+    {
+      name: 'Report 3 — mode sweep (0–10)',
+      note: 'Digitizer page, logicalMax=10 → 11-state enum. Sweeps byte[0] 0→10, 1000ms apart. Watch LED/lens.',
+      type: 'feature-send',
+      reportId: 3,
+      len: 1,
+      bytes: [0],
+      sweep: { idx: 0, from: 0, to: 10, delay: 1000 }
+    },
+    {
+      name: 'Report 5 — flags: both OFF (0x00)',
+      note: 'Digitizer page, bit0+bit1 flags, rest constant padding. Baseline state.',
+      type: 'feature-send',
+      reportId: 5,
+      len: 1,
+      bytes: [0x00]
+    },
+    {
+      name: 'Report 5 — flag bit0 ON (0x01)',
+      note: 'Isolates the first boolean flag (usage 0x17).',
+      type: 'feature-send',
+      reportId: 5,
+      len: 1,
+      bytes: [0x01]
+    },
+    {
+      name: 'Report 5 — flag bit1 ON (0x02)',
+      note: 'Isolates the second boolean flag (usage 0x18).',
+      type: 'feature-send',
+      reportId: 5,
+      len: 1,
+      bytes: [0x02]
+    },
+    {
+      name: 'Report 5 — both flags ON (0x03)',
+      note: 'Both bits set simultaneously.',
+      type: 'feature-send',
+      reportId: 5,
+      len: 1,
+      bytes: [0x03]
+    },
+    {
+      name: 'Report 6 — read current state',
+      note: 'receiveFeatureReport(6) first, before any writes — see if device returns a non-zero default/last-known state.',
+      type: 'feature-recv',
+      reportId: 6,
+      len: 63,
+      bytes: new Array(63).fill(0)
+    },
+    {
+      name: 'Report 6 — all-zero baseline (output)',
+      note: 'sendReport(6, 63×0x00). Establishes a known baseline before probing individual bytes.',
+      type: 'output',
+      reportId: 6,
+      len: 63,
+      bytes: new Array(63).fill(0)
+    },
+    {
+      name: 'Report 6 — sweep byte[0] 0x00–0x20 (command-byte hunt)',
+      note: 'Most vendor protocols put a command/opcode in byte 0. Sweeps 0x00–0x20 with rest zeroed, 1200ms apart — watch device AND the log for inputreport events.',
+      type: 'output',
+      reportId: 6,
+      len: 63,
+      bytes: new Array(63).fill(0),
+      sweep: { idx: 0, from: 0, to: 32, delay: 1200 }
+    },
+    {
+      name: 'Report 6 — sweep byte[0] FULL 0x00–0xFF',
+      note: 'Full byte range if the 0x00–0x20 pass found nothing. Slower (256 sends) — this alone takes ~5min at 1200ms delay. Consider dropping delay to 600ms once you trust the sweep loop isn\'t breaking anything.',
+      type: 'output',
+      reportId: 6,
+      len: 63,
+      bytes: new Array(63).fill(0),
+      sweep: { idx: 0, from: 0, to: 255, delay: 1200 }
+    },
+    {
+      name: 'Report 6 — sweep byte[1] (arg/length byte hunt)',
+      note: 'If byte[0] turns out to be a fixed magic/opcode once you find it, set it manually first, then use this to sweep the next byte as a possible argument or length field.',
+      type: 'output',
+      reportId: 6,
+      len: 63,
+      bytes: new Array(63).fill(0),
+      sweep: { idx: 1, from: 0, to: 32, delay: 1200 }
+    },
+    {
+      name: 'Report 6 — handshake attempt: 0xA1 magic',
+      note: 'GET_REPORT failed on this reportId — device may require an unlock/handshake write before it responds. Common magic byte convention seen in vendor HID protocols (cf. WebHID spec Report tag examples). Send this, THEN immediately try "read current state" preset again.',
+      type: 'output',
+      reportId: 6,
+      len: 63,
+      bytes: (() => { const b = new Array(63).fill(0); b[0] = 0xA1; return b; })()
+    },
+    {
+      name: 'Report 6 — handshake attempt: report-ID-as-first-byte',
+      note: 'Some protocols echo the report ID as the first payload byte too (double-tagged). Send this, THEN retry "read current state".',
+      type: 'output',
+      reportId: 6,
+      len: 63,
+      bytes: (() => { const b = new Array(63).fill(0); b[0] = 0x06; return b; })()
+    },
+    {
+      name: 'Report 6 — handshake attempt: 0xFF all-set first byte',
+      note: 'Alternative magic/unlock convention. Send this, THEN retry "read current state".',
+      type: 'output',
+      reportId: 6,
+      len: 63,
+      bytes: (() => { const b = new Array(63).fill(0); b[0] = 0xFF; return b; })()
+    },
+    {
+      name: 'Report 6 — CH57x-style handshake (all-zero) + retry read',
+      note: 'Per Trampert et al. Appendix F, CH57x expects an all-zero "handshake" report before it accepts programming reports. You already sent this as the baseline — after loading this preset, send it fresh, then immediately load and run "read current state" again to check if GET_REPORT now succeeds.',
+      type: 'output',
+      reportId: 6,
+      len: 63,
+      bytes: new Array(63).fill(0)
+    }
+  ];
+
+  function applyPreset(p) {
+    reportType.value = p.type;
+    reportIdInput.value = p.reportId;
+    payloadLen.value = p.len;
+    renderByteGrid(p.bytes);
+    syncHexFromGrid();
+    if (p.sweep) {
+      sweepByteIdx.value = p.sweep.idx;
+      sweepFrom.value = p.sweep.from;
+      sweepTo.value = p.sweep.to;
+      sweepDelay.value = p.sweep.delay;
+    }
+    line('info', `Preset loaded: "${p.name}" — ${p.note}`);
+  }
+
+  const presetListEl = document.getElementById('presetList');
+  presets.forEach(p => {
+    const btn = document.createElement('button');
+    btn.textContent = p.name;
+    btn.title = p.note;
+    btn.style.textAlign = 'left';
+    btn.style.fontSize = '11.5px';
+    btn.addEventListener('click', () => applyPreset(p));
+    presetListEl.appendChild(btn);
+  });
+
+  if (!('hid' in navigator)) {
+    statusLine.textContent = 'navigator.hid unavailable — use Chrome/Edge';
+    connectBtn.disabled = true;
+  }
+
+  connectBtn.addEventListener('click', async () => {
+    try {
+      const devices = await navigator.hid.requestDevice({ filters: [] });
+      if (devices.length === 0) {
+        line('err', 'No device selected.');
+        return;
+      }
+      device = devices[0];
+      if (!device.opened) await device.open();
+      statusLine.textContent = `Connected: ${device.productName || 'unnamed'} (0x${device.vendorId.toString(16)}:0x${device.productId.toString(16)})`;
+      statusLine.classList.add('connected');
+      line('info', `Device opened. ${device.collections.length} collection(s) available.`);
+
+      device.addEventListener('inputreport', (event) => {
+        const { data, reportId } = event;
+        const bytes = new Uint8Array(data.buffer);
+        line('evt', `inputreport fired — reportId=${reportId} bytes=[${bytesToHexStr(bytes)}]`);
+      });
+
+    } catch (err) {
+      line('err', 'Connect failed: ' + err.message);
+    }
+  });
+
+  async function sendOnce(rid, bytes) {
+    const type = reportType.value;
+    try {
+      if (type === 'feature-send') {
+        await device.sendFeatureReport(rid, bytes);
+        line('send', `sendFeatureReport(${rid}, [${bytesToHexStr(bytes)}]) — OK`);
+      } else if (type === 'output') {
+        await device.sendReport(rid, bytes);
+        line('send', `sendReport(${rid}, [${bytesToHexStr(bytes)}]) — OK`);
+      } else if (type === 'feature-recv') {
+        const result = await device.receiveFeatureReport(rid);
+        const recvBytes = new Uint8Array(result.buffer);
+        line('recv', `receiveFeatureReport(${rid}) → [${bytesToHexStr(recvBytes)}]`);
+      }
+    } catch (err) {
+      line('err', `reportId=${rid} failed: ${err.message}`);
+    }
+  }
+
+  sendBtn.addEventListener('click', async () => {
+    if (!device) { line('err', 'Not connected.'); return; }
+    const rid = parseInt(reportIdInput.value) || 0;
+    const bytes = getCurrentBytes();
+    await sendOnce(rid, bytes);
+  });
+
+  sweepBtn.addEventListener('click', async () => {
+    if (!device) { line('err', 'Not connected.'); return; }
+    sweeping = true;
+    sweepBtn.disabled = true;
+    sweepStopBtn.disabled = false;
+
+    const rid = parseInt(reportIdInput.value) || 0;
+    const idx = parseInt(sweepByteIdx.value) || 0;
+    const from = parseInt(sweepFrom.value) || 0;
+    const to = parseInt(sweepTo.value) || 0;
+    const delay = parseInt(sweepDelay.value) || 500;
+
+    // parse hold string: "0:a1,2:05" -> [[0,0xa1],[2,0x05]]
+    const holds = sweepHold.value.trim()
+      ? sweepHold.value.trim().split(',').map(pair => {
+          const [i, h] = pair.split(':');
+          return [parseInt(i.trim()), parseInt(h.trim(), 16) & 0xff];
+        })
+      : [];
+
+    line('info', `Sweep started: reportId=${rid}, byte[${idx}] from ${from} to ${to}, ${delay}ms delay${holds.length ? ', holding ' + holds.map(h => `byte[${h[0]}]=0x${h[1].toString(16)}`).join(', ') : ''}. Watch the device.`);
+
+    for (let v = from; v <= to && sweeping; v++) {
+      const bytes = getCurrentBytes();
+      holds.forEach(([i, h]) => { bytes[i] = h; });
+      bytes[idx] = v & 0xff;
+      await sendOnce(rid, bytes);
+      await new Promise(r => setTimeout(r, delay));
+    }
+
+    line('info', sweeping ? 'Sweep complete.' : 'Sweep stopped by user.');
+    sweeping = false;
+    sweepBtn.disabled = false;
+    sweepStopBtn.disabled = true;
+  });
+
+  sweepStopBtn.addEventListener('click', () => {
+    sweeping = false;
+  });
+
+  clearLogBtn.addEventListener('click', () => {
+    logEl.innerHTML = '';
+    logEntries = [];
+  });
+
+  exportLogBtn.addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(logEntries, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `webhid-probe-log-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // ================= CAMERA PREVIEW (getUserMedia, separate from WebHID) =================
+  const camPreview = document.getElementById('camPreview');
+  const camSelect = document.getElementById('camSelect');
+  const camStartBtn = document.getElementById('camStartBtn');
+  const camStopBtn = document.getElementById('camStopBtn');
+  const camStatus = document.getElementById('camStatus');
+  let camStream = null;
+
+  async function populateCameraList() {
+    try {
+      // Need a permission grant before labels are populated; enumerate first,
+      // re-enumerate after start if labels come back blank.
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter(d => d.kind === 'videoinput');
+      camSelect.innerHTML = '';
+      cams.forEach((c, i) => {
+        const opt = document.createElement('option');
+        opt.value = c.deviceId;
+        opt.textContent = c.label || `Camera ${i + 1} (label hidden until permission granted)`;
+        camSelect.appendChild(opt);
+      });
+      if (cams.length === 0) {
+        const opt = document.createElement('option');
+        opt.textContent = 'No cameras found';
+        camSelect.appendChild(opt);
+      }
+    } catch (err) {
+      line('err', `[cam] enumerateDevices failed: ${err.message}`);
+    }
+  }
+  populateCameraList();
+
+  camStartBtn.addEventListener('click', async () => {
+    try {
+      const deviceId = camSelect.value;
+      const constraints = { video: deviceId ? { deviceId: { exact: deviceId } } : true, audio: false };
+      camStream = await navigator.mediaDevices.getUserMedia(constraints);
+      camPreview.srcObject = camStream;
+      camStatus.textContent = 'Preview live.';
+      camStatus.classList.add('connected');
+      camStartBtn.disabled = true;
+      camStopBtn.disabled = false;
+      line('info', '[cam] video preview started — watch this alongside the physical device during the flow');
+      populateCameraList(); // labels are now populated post-permission
+    } catch (err) {
+      camStatus.textContent = 'Failed: ' + err.message;
+      line('err', `[cam] getUserMedia failed: ${err.message}`);
+    }
+  });
+
+  camStopBtn.addEventListener('click', () => {
+    if (camStream) {
+      camStream.getTracks().forEach(t => t.stop());
+      camStream = null;
+    }
+    camPreview.srcObject = null;
+    camStatus.textContent = 'Preview stopped.';
+    camStatus.classList.remove('connected');
+    camStartBtn.disabled = false;
+    camStopBtn.disabled = true;
+    line('info', '[cam] video preview stopped');
+  });
+
+  // ================= AUTOMATED FLOW ENGINE =================
+  const flowStartBtn = document.getElementById('flowStartBtn');
+  const flowPauseBtn = document.getElementById('flowPauseBtn');
+  const flowResumeBtn = document.getElementById('flowResumeBtn');
+  const flowStopBtn = document.getElementById('flowStopBtn');
+  const flowDelayInput = document.getElementById('flowDelay');
+  const flowSkipFullSweep = document.getElementById('flowSkipFullSweep');
+  const flowStatus = document.getElementById('flowStatus');
+  const flowStep = document.getElementById('flowStep');
+
+  let flowRunning = false;
+  let flowPaused = false;
+  let flowStopRequested = false;
+
+  function flowSleep(ms) {
+    return new Promise(resolve => {
+      const check = () => {
+        if (flowStopRequested) { resolve(); return; }
+        if (flowPaused) { setTimeout(check, 150); return; }
+        setTimeout(resolve, ms);
+      };
+      check();
+    });
+  }
+
+  async function flowWaitWhilePaused() {
+    while (flowPaused && !flowStopRequested) {
+      await new Promise(r => setTimeout(r, 150));
+    }
+  }
+
+  // Directly send using the low-level device API, independent of the manual
+  // form's reportType field, so the flow engine can't be desynced by whatever
+  // the user last clicked in the Manual tab.
+  async function flowSend(kind, rid, bytes) {
+    if (flowStopRequested) return;
+    await flowWaitWhilePaused();
+    if (flowStopRequested) return;
+    try {
+      if (kind === 'feature-send') {
+        await device.sendFeatureReport(rid, bytes);
+        line('send', `[auto] sendFeatureReport(${rid}, [${bytesToHexStr(bytes)}]) — OK`);
+      } else if (kind === 'output') {
+        await device.sendReport(rid, bytes);
+        line('send', `[auto] sendReport(${rid}, [${bytesToHexStr(bytes)}]) — OK`);
+      } else if (kind === 'feature-recv') {
+        const result = await device.receiveFeatureReport(rid);
+        const recvBytes = new Uint8Array(result.buffer);
+        line('recv', `[auto] receiveFeatureReport(${rid}) → [${bytesToHexStr(recvBytes)}]`);
+        return recvBytes;
+      }
+    } catch (err) {
+      line('err', `[auto] reportId=${rid} (${kind}) failed: ${err.message}`);
+      return null;
+    }
+    return true;
+  }
+
+  function setFlowStep(text) {
+    flowStep.textContent = text;
+    line('info', `[flow] ${text}`);
+  }
+
+  async function runAutomatedFlow() {
+    if (!device) {
+      line('err', 'Connect a device before starting the flow.');
+      return;
+    }
+
+    flowRunning = true;
+    flowPaused = false;
+    flowStopRequested = false;
+    flowStartBtn.disabled = true;
+    flowPauseBtn.disabled = false;
+    flowResumeBtn.disabled = true;
+    flowStopBtn.disabled = false;
+    flowStatus.textContent = 'Running…';
+    flowStatus.classList.add('connected');
+
+    const delay = parseInt(flowDelayInput.value) || 1000;
+    const zero63 = new Array(63).fill(0);
+
+    try {
+      // --- Step 1: Report 3 sweep 0–10 ---
+      setFlowStep('Step 1/7 — Report 3 mode sweep (0–10). Watch the device.');
+      for (let v = 0; v <= 10 && !flowStopRequested; v++) {
+        await flowSend('feature-send', 3, new Uint8Array([v]));
+        await flowSleep(delay);
+      }
+
+      // --- Step 2: Report 5 all 4 states ---
+      setFlowStep('Step 2/7 — Report 5 flag states (00, 01, 02, 03).');
+      for (const v of [0x00, 0x01, 0x02, 0x03]) {
+        if (flowStopRequested) break;
+        await flowSend('feature-send', 5, new Uint8Array([v]));
+        await flowSleep(delay);
+      }
+
+      // --- Step 3: Report 6 initial read attempt ---
+      setFlowStep('Step 3/7 — Report 6 read attempt (expected to fail per prior run — confirming).');
+      await flowSend('feature-recv', 6, null);
+      await flowSleep(delay);
+
+      // --- Step 4: Report 6 baseline write ---
+      setFlowStep('Step 4/7 — Report 6 all-zero baseline write.');
+      await flowSend('output', 6, new Uint8Array(zero63));
+      await flowSleep(delay);
+
+      // --- Step 5: handshake attempts, each followed by a retry read ---
+      setFlowStep('Step 5/7 — Handshake attempts (0xA1, 0x06, 0xFF), each followed by a read retry.');
+      const handshakes = [0xA1, 0x06, 0xFF];
+      for (const magic of handshakes) {
+        if (flowStopRequested) break;
+        const payload = new Uint8Array(zero63);
+        payload[0] = magic;
+        line('info', `[flow] trying handshake byte 0x${magic.toString(16)}`);
+        await flowSend('output', 6, payload);
+        await flowSleep(300);
+        const readResult = await flowSend('feature-recv', 6, null);
+        if (readResult && readResult !== true) {
+          line('obs', `⚡ Handshake 0x${magic.toString(16)} may have unlocked read — got non-error response, check log above`, 'obs-line');
+        }
+        await flowSleep(delay);
+      }
+
+      // --- Step 6: narrow byte[0] sweep ---
+      setFlowStep('Step 6/7 — Report 6 byte[0] sweep 0x00–0x20. Watch closely.');
+      for (let v = 0; v <= 0x20 && !flowStopRequested; v++) {
+        const payload = new Uint8Array(zero63);
+        payload[0] = v;
+        await flowSend('output', 6, payload);
+        await flowSleep(delay);
+      }
+
+      // --- Step 7: optional full sweep ---
+      if (!flowSkipFullSweep.checked && !flowStopRequested) {
+        setFlowStep('Step 7/7 — Report 6 byte[0] FULL sweep 0x00–0xFF. This takes a while.');
+        for (let v = 0; v <= 0xFF && !flowStopRequested; v++) {
+          const payload = new Uint8Array(zero63);
+          payload[0] = v;
+          await flowSend('output', 6, payload);
+          await flowSleep(delay);
+        }
+      } else {
+        setFlowStep('Step 7/7 — skipped (full sweep unchecked).');
+      }
+
+      if (flowStopRequested) {
+        setFlowStep('Flow stopped by user.');
+        flowStatus.textContent = 'Stopped.';
+      } else {
+        setFlowStep('Flow complete. Review the log and any ⚡ observation markers against your video.');
+        flowStatus.textContent = 'Complete.';
+      }
+
+    } finally {
+      flowRunning = false;
+      flowPaused = false;
+      flowStartBtn.disabled = false;
+      flowPauseBtn.disabled = true;
+      flowResumeBtn.disabled = true;
+      flowStopBtn.disabled = true;
+    }
+  }
+
+  flowStartBtn.addEventListener('click', runAutomatedFlow);
+
+  flowPauseBtn.addEventListener('click', () => {
+    flowPaused = true;
+    flowPauseBtn.disabled = true;
+    flowResumeBtn.disabled = false;
+    flowStatus.textContent = 'Paused.';
+    line('info', '[flow] paused by user');
+  });
+
+  flowResumeBtn.addEventListener('click', () => {
+    flowPaused = false;
+    flowPauseBtn.disabled = false;
+    flowResumeBtn.disabled = true;
+    flowStatus.textContent = 'Running…';
+    line('info', '[flow] resumed by user');
+  });
+
+  flowStopBtn.addEventListener('click', () => {
+    flowStopRequested = true;
+    flowPaused = false;
+    flowStatus.textContent = 'Stopping…';
+    line('info', '[flow] stop requested by user');
+  });
+</script>
+
+</body>
+</html>

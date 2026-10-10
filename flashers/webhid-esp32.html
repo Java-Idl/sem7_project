@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP32-S3 Web Flasher</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f0f0f0; }
+        button { padding: 10px 20px; font-size: 16px; margin: 10px; }
+        #log { background: #333; color: #0f0; padding: 10px; font-family: monospace; height: 300px; overflow-y: scroll; }
+    </style>
+</head>
+<body>
+    <h1>ESP32-S3 Firmware Flasher</h1>
+    <p><strong>IMPORTANT:</strong> Put the board in download mode (Hold BOOT, press RESET, release BOOT) before clicking Connect.</p>
+
+    <button id="connectBtn">1. Connect to Device</button>
+    <input type="file" id="firmwareFile" accept=".bin" />
+    <button id="flashBtn" disabled>2. Flash Firmware</button>
+
+    <div id="log"></div>
+
+    <script type="module">
+        import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js/bundle.js';
+
+        const logElement = document.getElementById('log');
+        const connectBtn = document.getElementById('connectBtn');
+        const flashBtn = document.getElementById('flashBtn');
+        const fileInput = document.getElementById('firmwareFile');
+
+        let device = null;
+        let transport = null;
+        let loader = null;
+
+        const terminal = {
+            clean: () => logElement.innerHTML = '',
+            writeLine: (data) => logElement.innerHTML += `<div>${data}</div>`,
+            write: (data) => logElement.innerHTML += data,
+        };
+
+        connectBtn.addEventListener('click', async () => {
+            try {
+                logElement.innerHTML = 'Requesting serial port...';
+                const port = await navigator.serial.requestPort();
+                
+                transport = new Transport(port, true);
+                loader = new ESPLoader({
+                    transport: transport,
+                    baudrate: 115200,
+                    terminal: terminal,
+                });
+
+                logElement.innerHTML += '<div>Connecting to chip...</div>';
+                const chipName = await loader.main();
+                logElement.innerHTML += `<div>Connected to: ${chipName}</div>`;
+                
+                connectBtn.disabled = true;
+                flashBtn.disabled = false;
+
+            } catch (err) {
+                logElement.innerHTML += `<div>Error: ${err.message}</div>`;
+            }
+        });
+
+        flashBtn.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select a firmware .bin file first.');
+                return;
+            }
+
+            try {
+                const data = await file.arrayBuffer();
+                const firmwareData = new Uint8Array(data);
+                
+                // Default application offset for ESP32-S3 is 0x10000
+                const flashAddress = 0x10000; 
+
+                logElement.innerHTML += `<div>Flashing ${file.name} at address 0x${flashAddress.toString(16)}...</div>`;
+
+                await loader.writeFlash({
+                    fileArray: [{ data: firmwareData, address: flashAddress }],
+                    flashSize: 'keep',
+                    flashMode: 'keep',
+                    flashFreq: 'keep',
+                    eraseAll: false,
+                    compress: true,
+                    reportProgress: (fileIndex, written, total) => {
+                        // You can update a progress bar here
+                        console.log(`Progress: ${(written / total * 100).toFixed(2)}%`);
+                    }
+                });
+
+                logElement.innerHTML += '<div>Flash successful! Resetting device...</div>';
+                await loader.hardReset();
+                logElement.innerHTML += '<div>Done. Device is running new firmware.</div>';
+
+            } catch (err) {
+                logElement.innerHTML += `<div>Flash Error: ${err.message}</div>`;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,581 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2026-10-10",
+  "description": "Database of known reprogrammable peripheral devices vulnerable to browser-based WebHID, WebSerial, and WebMIDI exploitation.",
+  "devices": [
+    {
+      "id": "logitech_g502_hero",
+      "name": "Logitech G502 HERO Gaming Mouse",
+      "vendor": "Logitech",
+      "vendorId": 1133,
+      "productId": 49291,
+      "vendorIdHex": "0x046d",
+      "productIdHex": "0xc08b",
+      "category": "Gaming Mouse",
+      "protocol": "HID++ 2.0 / 4.2",
+      "riskLevel": "CRITICAL",
+      "cve": ["CVE-2019-13055-variant"],
+      "description": "Contains onboard non-volatile memory pages reprogrammable via WebHID to execute arbitrary macro keystrokes without user awareness.",
+      "dangerousOperations": [
+        "HID++ Onboard Memory Feature (0x8100) manipulation",
+        "Writing memory pages (writePage, functionId 0x06, 0x07, 0x08)",
+        "Overwriting button bindings with keyboard scancode sequences",
+        "Firmware update functions (0x0003, 0x0005, 0x0007)"
+      ],
+      "safeOperations": [
+        "Device enumeration and discovery",
+        "Querying feature index (0x00, functionId 0x00)",
+        "Reading device name string (featureIndex 0x03, functionId 0x01)",
+        "Battery and DPI read queries"
+      ],
+      "reportSignatures": [
+        {
+          "reportId": 17,
+          "direction": "out",
+          "matchByteIndices": [1],
+          "featureId": 33024,
+          "featureIdHex": "0x8100",
+          "rule": "block_onboard_memory"
+        }
+      ]
+    },
+    {
+      "id": "logitech_g203",
+      "name": "Logitech G203 Prodigy / Lightsync",
+      "vendor": "Logitech",
+      "vendorId": 1133,
+      "productId": 49284,
+      "vendorIdHex": "0x046d",
+      "productIdHex": "0xc084",
+      "category": "Gaming Mouse",
+      "protocol": "HID++ 2.0 / 4.2",
+      "riskLevel": "CRITICAL",
+      "cve": [],
+      "description": "Vulnerable to onboard memory page dumping and reprogramming via HID++ 2.0 to emit BadUSB keystrokes.",
+      "dangerousOperations": [
+        "HID++ 0x8100 onboard profile write",
+        "Overwriting page 0-4 memory buffers"
+      ],
+      "safeOperations": [
+        "Feature index discovery",
+        "LED status and DPI reading"
+      ],
+      "reportSignatures": [
+        {
+          "reportId": 17,
+          "direction": "out",
+          "featureId": 33024,
+          "featureIdHex": "0x8100",
+          "rule": "block_onboard_memory"
+        }
+      ]
+    },
+    {
+      "id": "logitech_g305",
+      "name": "Logitech G305 Lightspeed Wireless",
+      "vendor": "Logitech",
+      "vendorId": 1133,
+      "productId": 16500,
+      "vendorIdHex": "0x046d",
+      "productIdHex": "0x4074",
+      "category": "Wireless Gaming Mouse",
+      "protocol": "HID++ 2.0 via Lightspeed Receiver",
+      "riskLevel": "CRITICAL",
+      "cve": [],
+      "description": "Wirelessly reprogrammable onboard macro pages (page 2 macro sequence) using HID++ long reports.",
+      "dangerousOperations": [
+        "HID++ 0x8100 onboard page write",
+        "Wireless profile modification"
+      ],
+      "safeOperations": [
+        "Receiver pairing queries",
+        "Battery status polling"
+      ],
+      "reportSignatures": [
+        {
+          "reportId": 17,
+          "direction": "out",
+          "featureId": 33024,
+          "featureIdHex": "0x8100",
+          "rule": "block_onboard_memory"
+        }
+      ]
+    },
+    {
+      "id": "logitech_g500s",
+      "name": "Logitech G500s Gaming Mouse",
+      "vendor": "Logitech",
+      "vendorId": 1133,
+      "productId": 49742,
+      "vendorIdHex": "0x046d",
+      "productIdHex": "0xc24e",
+      "category": "Gaming Mouse",
+      "protocol": "HID++ 1.0",
+      "riskLevel": "CRITICAL",
+      "cve": [],
+      "description": "Uses legacy HID++ 1.0 register operations (subId 0x80/0x90/0x91/0x0f) to write internal memory and trigger key macros.",
+      "dangerousOperations": [
+        "subId 0x90/0x91 writeMemory sequences",
+        "subId 0x80 resetSequence (0xa1 0x01)",
+        "subId 0x82 fillPage",
+        "Register 0x0f loadProfileAddress / setFactoryProfile"
+      ],
+      "safeOperations": [
+        "Register 0x0f read operation (subId 0x81)"
+      ],
+      "reportSignatures": [
+        {
+          "reportId": 17,
+          "direction": "out",
+          "subId": 144,
+          "subIdHex": "0x90",
+          "rule": "block_hidpp1_write_memory"
+        },
+        {
+          "reportId": 17,
+          "direction": "out",
+          "subId": 145,
+          "subIdHex": "0x91",
+          "rule": "block_hidpp1_write_memory"
+        }
+      ]
+    },
+    {
+      "id": "logitech_unifying_receiver",
+      "name": "Logitech Unifying Receiver",
+      "vendor": "Logitech",
+      "vendorId": 1133,
+      "productId": 50475,
+      "vendorIdHex": "0x046d",
+      "productIdHex": "0xc52b",
+      "category": "Wireless USB Receiver",
+      "protocol": "Logitech Unifying / Bootloader",
+      "riskLevel": "CRITICAL",
+      "cve": ["CVE-2019-13055", "CVE-2019-13054"],
+      "description": "Vulnerable to arbitrary flash dumping, firmware downgrade attacks without rollback protection, and bootloader memory extraction.",
+      "dangerousOperations": [
+        "Forcing bootloader mode (0xff 0x80 0xf0)",
+        "Memory readout / AES key extraction (0xff 0x81 0xd4)",
+        "Firmware downgrade flash frames on reportId 0 / 16"
+      ],
+      "safeOperations": [
+        "Device enumeration",
+        "Normal wireless paired device status polling"
+      ],
+      "reportSignatures": [
+        {
+          "reportId": 16,
+          "direction": "out",
+          "pattern": [255, 128, 240],
+          "patternHex": "0xff 0x80 0xf0",
+          "rule": "block_unifying_bootloader"
+        },
+        {
+          "reportId": 16,
+          "direction": "out",
+          "pattern": [255, 129, 212],
+          "patternHex": "0xff 0x81 0xd4",
+          "rule": "block_unifying_key_extraction"
+        }
+      ]
+    },
+    {
+      "id": "logitech_unifying_bootloader",
+      "name": "Logitech Unifying Receiver (Bootloader Mode)",
+      "vendor": "Logitech",
+      "vendorId": 1133,
+      "productId": 43692,
+      "vendorIdHex": "0x046d",
+      "productIdHex": "0xaaac",
+      "category": "Bootloader Device",
+      "protocol": "Logitech Flash Bootloader",
+      "riskLevel": "CRITICAL",
+      "cve": ["CVE-2019-13055"],
+      "description": "Receiver running in firmware flash bootloader state. Vulnerable to rogue firmware flashing.",
+      "dangerousOperations": [
+        "All flash block writes (reportId 0 or 16)"
+      ],
+      "safeOperations": [],
+      "reportSignatures": [
+        {
+          "reportId": 0,
+          "direction": "out",
+          "rule": "block_all_bootloader_writes"
+        }
+      ]
+    },
+    {
+      "id": "ch57x_macropad",
+      "name": "WCH CH57X Custom Macro Pad / Keyboard",
+      "vendor": "WCH / Generic",
+      "vendorId": 4489,
+      "productId": 34960,
+      "vendorIdHex": "0x1189",
+      "productIdHex": "0x8890",
+      "category": "Programmable Keyboard / Macropad",
+      "protocol": "CH57x Custom HID Protocol",
+      "riskLevel": "CRITICAL",
+      "cve": [],
+      "description": "Cheap macropad widely sold online. Browser WebHID page can silently flash multi-step keystroke macros into hardware.",
+      "dangerousOperations": [
+        "Report ID 3 with opcode 0xa1 (sendKeyUpdateStart)",
+        "Report ID 3 with opcode 0xaa (sendKeyUpdateEnd)",
+        "Overwriting Layer 1/2/3 key mappings with BadUSB payload"
+      ],
+      "safeOperations": [
+        "Report ID 3 zero-filled hello handshake"
+      ],
+      "reportSignatures": [
+        {
+          "reportId": 3,
+          "direction": "out",
+          "firstByte": 161,
+          "firstByteHex": "0xa1",
+          "rule": "block_ch57x_key_update"
+        },
+        {
+          "reportId": 3,
+          "direction": "out",
+          "firstByte": 170,
+          "firstByteHex": "0xaa",
+          "rule": "block_ch57x_key_update_end"
+        }
+      ]
+    },
+    {
+      "id": "zelotes_t90",
+      "name": "Zelotes T90 Gaming Mouse",
+      "vendor": "Zelotes / Holtek",
+      "vendorId": 12538,
+      "productId": 4416,
+      "vendorIdHex": "0x30fa",
+      "productIdHex": "0x1140",
+      "category": "Gaming Mouse",
+      "protocol": "Holtek Gaming Mouse Protocol",
+      "riskLevel": "CRITICAL",
+      "cve": [],
+      "description": "Low-cost gaming mouse with reprogrammable onboard macro button memory via Feature Report 7.",
+      "dangerousOperations": [
+        "Feature Report 7 packet header 0x18 with cmd 0x03 (write block)",
+        "Feature Report 7 packet header 0x18 with cmd 0x09 (end block)",
+        "Feature Report 7 packet header 0x18 with cmd 0x00 (finalize)",
+        "Feature Report 7 packet header 0x18 with cmd 0x05 (configure buttons)",
+        "Feature Report 7 packet header 0x18 with cmd 0x10 (end programming)"
+      ],
+      "safeOperations": [
+        "Feature Report 7 non-0x18 read queries",
+        "Factory calibration queries"
+      ],
+      "reportSignatures": [
+        {
+          "reportId": 7,
+          "direction": "feature",
+          "firstByte": 24,
+          "firstByteHex": "0x18",
+          "rule": "block_zelotes_programming"
+        }
+      ]
+    },
+    {
+      "id": "speedlink_decus",
+      "name": "Speedlink Decus / Retaliat Gaming Mouse",
+      "vendor": "Speedlink",
+      "vendorId": 12538,
+      "productId": 7425,
+      "vendorIdHex": "0x30fa",
+      "productIdHex": "0x1d01",
+      "category": "Gaming Mouse",
+      "protocol": "Holtek / Sino Wealth HID",
+      "riskLevel": "CRITICAL",
+      "cve": [],
+      "description": "Shares the Holtek 0x18 packet structure with Zelotes mice; WebHID can write persistent command execution macros.",
+      "dangerousOperations": [
+        "Feature Report 7 macro byte stream injection (0x18 commands)"
+      ],
+      "safeOperations": [
+        "Standard status queries"
+      ],
+      "reportSignatures": [
+        {
+          "reportId": 7,
+          "direction": "feature",
+          "firstByte": 24,
+          "firstByteHex": "0x18",
+          "rule": "block_zelotes_programming"
+        }
+      ]
+    },
+    {
+      "id": "roccat_kone_aimo",
+      "name": "Roccat Kone Aimo 16K Gaming Mouse",
+      "vendor": "Roccat",
+      "vendorId": 7805,
+      "productId": 11820,
+      "vendorIdHex": "0x1e7d",
+      "productIdHex": "0x2e2c",
+      "category": "Gaming Mouse",
+      "protocol": "Roccat Talk Feature Reports",
+      "riskLevel": "CRITICAL",
+      "cve": [],
+      "description": "Allows persistent multi-byte macro uploads onto mouse profile 2 buttons via Feature Reports 13, 7, 8, 14.",
+      "dangerousOperations": [
+        "Feature Report 13 raw macro payload transmission",
+        "Feature Report 8 macro name and key sequence upload",
+        "Feature Report 14 profile activation"
+      ],
+      "safeOperations": [
+        "Lighting color queries",
+        "DPI stage reading"
+      ],
+      "reportSignatures": [
+        {
+          "reportId": 8,
+          "direction": "feature",
+          "rule": "block_roccat_macro_upload"
+        },
+        {
+          "reportId": 13,
+          "direction": "feature",
+          "rule": "block_roccat_raw_payload"
+        }
+      ]
+    },
+    {
+      "id": "redragon_m711",
+      "name": "Redragon M711 Cobra Gaming Mouse",
+      "vendor": "Redragon / Sino Wealth",
+      "vendorId": 9610,
+      "productId": 4103,
+      "vendorIdHex": "0x258a",
+      "productIdHex": "0x1007",
+      "category": "Gaming Mouse",
+      "protocol": "Sino Wealth Protocol",
+      "riskLevel": "HIGH",
+      "cve": [],
+      "description": "Rebinds mouse buttons to keystrokes and uploads macro buffer using Feature Reports 4 and 6.",
+      "dangerousOperations": [
+        "Feature Report 4 button remapping",
+        "Feature Report 6 macro buffer write"
+      ],
+      "safeOperations": [
+        "DPI and polling rate reading"
+      ],
+      "reportSignatures": [
+        {
+          "reportId": 4,
+          "direction": "feature",
+          "rule": "block_redragon_button_rebind"
+        },
+        {
+          "reportId": 6,
+          "direction": "feature",
+          "rule": "block_redragon_macro_buffer"
+        }
+      ]
+    },
+    {
+      "id": "redragon_k629",
+      "name": "Redragon K629 / K552 Mechanical Keyboard",
+      "vendor": "Redragon",
+      "vendorId": 9610,
+      "productId": 73,
+      "vendorIdHex": "0x258a",
+      "productIdHex": "0x0049",
+      "category": "Mechanical Keyboard",
+      "protocol": "Sino Wealth Keyboard Protocol",
+      "riskLevel": "HIGH",
+      "cve": [],
+      "description": "Uses vendor feature reports 5 and 6 to reprogram internal key matrices and onboard flash macros.",
+      "dangerousOperations": [
+        "Feature Report 5 initiation (0x84 0xd4)",
+        "Feature Report 6 macro programming stream"
+      ],
+      "safeOperations": [
+        "RGB backlight pattern queries"
+      ],
+      "reportSignatures": [
+        {
+          "reportId": 5,
+          "direction": "feature",
+          "rule": "block_redragon_kb_init"
+        },
+        {
+          "reportId": 6,
+          "direction": "feature",
+          "rule": "block_redragon_kb_macro"
+        }
+      ]
+    },
+    {
+      "id": "pcsensor_foot_switch",
+      "name": "PCsensor USB Foot Switch",
+      "vendor": "PCsensor",
+      "vendorId": 13651,
+      "productId": 45057,
+      "vendorIdHex": "0x3553",
+      "productIdHex": "0xb001",
+      "category": "Foot Switch / Assistive Device",
+      "protocol": "PCsensor Output Reports",
+      "riskLevel": "HIGH",
+      "cve": [],
+      "description": "USB pedal programmable via WebHID Output Report 0 to send custom keystrokes or hotkeys when stepped on.",
+      "dangerousOperations": [
+        "Report ID 0 with 0x01 0xc0 (macro programming init)",
+        "Report ID 0 with 0x01 0xc1 (macro programming epilogue)",
+        "Report ID 0 with 0x01 0x81 / 0x01 0x82 (macro activation)"
+      ],
+      "safeOperations": [
+        "Pedal press state reads"
+      ],
+      "reportSignatures": [
+        {
+          "reportId": 0,
+          "direction": "out",
+          "pattern": [1, 192],
+          "patternHex": "0x01 0xc0",
+          "rule": "block_foot_switch_reprogram"
+        }
+      ]
+    },
+    {
+      "id": "microsoft_sculpt_sidewinder",
+      "name": "Microsoft SideWinder / Sculpt Macro Peripheral",
+      "vendor": "Microsoft",
+      "vendorId": 1118,
+      "productId": 1957,
+      "vendorIdHex": "0x045e",
+      "productIdHex": "0x07a5",
+      "category": "Keyboard / Mouse",
+      "protocol": "Microsoft Custom HID",
+      "riskLevel": "HIGH",
+      "cve": [],
+      "description": "Supports Feature Report 36 for setting custom button event handlers and macro dispatch scripts.",
+      "dangerousOperations": [
+        "Feature Report 36 macro assignment packets (0x88 0x05 0x05)"
+      ],
+      "safeOperations": [
+        "Standard battery and connection status"
+      ],
+      "reportSignatures": [
+        {
+          "reportId": 36,
+          "direction": "feature",
+          "pattern": [136, 5, 5],
+          "patternHex": "0x88 0x05 0x05",
+          "rule": "block_ms_macro_feature"
+        }
+      ]
+    },
+    {
+      "id": "aula_gaming_device",
+      "name": "Aula Gaming Peripheral",
+      "vendor": "Aula",
+      "vendorId": 9610,
+      "productId": 42,
+      "vendorIdHex": "0x258a",
+      "productIdHex": "0x002a",
+      "category": "Gaming Mouse / Macropad",
+      "protocol": "Aula Feature Report Protocol",
+      "riskLevel": "HIGH",
+      "cve": [],
+      "description": "Vulnerable to macro key sequence overwrites via vendor-specific feature reports.",
+      "dangerousOperations": [
+        "Vendor feature report write commands containing keyboard scan sequences"
+      ],
+      "safeOperations": [
+        "Device identification queries"
+      ],
+      "reportSignatures": []
+    },
+    {
+      "id": "novation_launchpad_mk2",
+      "name": "Novation Launchpad MK2 (WebMIDI)",
+      "vendor": "Novation / Focusrite",
+      "vendorId": 4661,
+      "productId": 105,
+      "vendorIdHex": "0x1235",
+      "productIdHex": "0x0069",
+      "category": "MIDI Controller",
+      "protocol": "WebMIDI / SysEx",
+      "riskLevel": "CRITICAL",
+      "cve": [],
+      "description": "WebMIDI SysEx messages can force device into bootloader mode and upload malicious custom firmware to emit keystrokes or brick the controller.",
+      "dangerousOperations": [
+        "SysEx bootloader entry: [0xf0, 0x00, 0x20, 0x29, 0x00, 0x71, 0x00, 0x69, 0xf7]",
+        "SysEx firmware streaming packets matching manufacturer ID 0x00 0x20 0x29"
+      ],
+      "safeOperations": [
+        "Standard Note On / Note Off messages (0x80 - 0x9f)",
+        "Control Change messages (0xb0)",
+        "LED feedback color SysEx updates"
+      ],
+      "reportSignatures": [
+        {
+          "protocol": "midi",
+          "sysexManufacturer": [0, 32, 41],
+          "sysexManufacturerHex": "0x00 0x20 0x29",
+          "bootloaderOpcode": 113,
+          "bootloaderOpcodeHex": "0x71",
+          "rule": "block_midi_firmware_flash"
+        }
+      ]
+    },
+    {
+      "id": "hayes_serial_modem",
+      "name": "Hayes-compatible LTE Modem (Fibocom L850-GL)",
+      "vendor": "Fibocom / Generic Modem",
+      "vendorId": 11447,
+      "productId": 2048,
+      "vendorIdHex": "0x2cb7",
+      "productIdHex": "0x0800",
+      "category": "Serial Modem / Cellular Module",
+      "protocol": "WebSerial / Hayes AT",
+      "riskLevel": "CRITICAL",
+      "cve": [],
+      "description": "WebSerial connection allows webpage to send premium SMS (AT+CMGS), unlock or manipulate SIM (AT+CPIN), and trigger modem firmware updates.",
+      "dangerousOperations": [
+        "AT+CMGS SMS transmission",
+        "AT+CPIN PIN manipulation",
+        "AT+CFUN radio resetting",
+        "Modem firmware flashing and NVRAM commands (AT^FLASH, AT+FUS)"
+      ],
+      "safeOperations": [
+        "AT signal quality read (AT+CSQ)",
+        "AT manufacturer identification (AT+CGMI, AT+CGMM)",
+        "AT OK ping"
+      ],
+      "reportSignatures": [
+        {
+          "protocol": "serial",
+          "regexPatterns": [
+            "^\\s*AT\\+CMGS",
+            "^\\s*AT\\+CPIN",
+            "^\\s*AT\\+CFUN=0",
+            "^\\s*AT\\+CFUN=4",
+            "^\\s*AT\\^FLASH",
+            "^\\s*AT\\+FUS"
+          ],
+          "rule": "block_dangerous_at_commands"
+        }
+      ]
+    }
+  ],
+  "heuristicRules": {
+    "keyboardUsage": {
+      "usagePage": 1,
+      "usage": 6,
+      "description": "Standard HID Keyboard collection detected on non-standard device"
+    },
+    "vendorDefinedUsagePage": {
+      "minUsagePage": 65280,
+      "description": "Vendor-defined Usage Page (>= 0xff00) capable of undocumented proprietary firmware writes"
+    },
+    "largeReportThreshold": 32,
+    "highRiskFeatures": [
+      "hasOutputReports",
+      "hasFeatureReports",
+      "isKeyboardUsage",
+      "hasVendorUsagePage"
+    ]
+  }
+}

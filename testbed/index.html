@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PeripheralShield - Exploit & Defense Testbed</title>
+  <link rel="stylesheet" href="testbed.css">
+</head>
+<body>
+  <div class="testbed-container">
+    <header class="testbed-header">
+      <div class="header-left">
+        <div class="shield-badge">🛡️</div>
+        <div>
+          <h1>PeripheralShield Exploit & Defense Testbed</h1>
+          <p class="subtitle">Interactive verification suite for WebHID, WebSerial, and WebMIDI peripheral attack vectors</p>
+        </div>
+      </div>
+      <div id="extensionStatus" class="ext-status-pill checking">
+        Checking Extension Defense...
+      </div>
+    </header>
+
+    <div class="grid-main">
+      <!-- Left Column: Attack Simulations -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Simulated Exploit Vectors (PeripheralInstinct Paper)</h2>
+          <span class="badge badge-danger">Malicious Payloads</span>
+        </div>
+        <p class="panel-desc">Test whether the defensive extension intercepts and neutralizes dangerous peripheral commands.</p>
+
+        <div class="attack-list">
+          <!-- Vector 1: Logitech G502 HID++ -->
+          <div class="attack-card">
+            <div class="attack-meta">
+              <span class="attack-target">Logitech G502 / G203 / G305</span>
+              <span class="attack-cve">CVE-2019-13055-variant</span>
+            </div>
+            <h3>HID++ 2.0 Feature 0x8100 Macro Overwrite</h3>
+            <p>Attempts to invoke Onboard Memory writePage (function 0x06/0x07) to rebind the mouse side button to simulated Win+R keystrokes.</p>
+            <div class="attack-actions">
+              <button class="btn btn-danger btn-sm" id="btnAttackLogitech">Simulate Attack</button>
+              <button class="btn btn-secondary btn-sm" id="btnBenignLogitech">Send Benign GetFeature</button>
+            </div>
+          </div>
+
+          <!-- Vector 2: CH57X Macropad -->
+          <div class="attack-card">
+            <div class="attack-meta">
+              <span class="attack-target">WCH CH57X Keyboard</span>
+              <span class="attack-cve">BadUSB Reprogramming</span>
+            </div>
+            <h3>CH57X Report 3 Key Update (0xa1 / 0xaa)</h3>
+            <p>Attempts to upload a multi-line keystroke sequence using WCH vendor opcodes to execute silent commands upon next keypress.</p>
+            <div class="attack-actions">
+              <button class="btn btn-danger btn-sm" id="btnAttackCH57X">Simulate Attack</button>
+              <button class="btn btn-secondary btn-sm" id="btnBenignCH57X">Send Benign Handshake</button>
+            </div>
+          </div>
+
+          <!-- Vector 3: Unifying Receiver -->
+          <div class="attack-card">
+            <div class="attack-meta">
+              <span class="attack-target">Logitech Unifying Receiver</span>
+              <span class="attack-cve">CVE-2019-13055</span>
+            </div>
+            <h3>AES Key Extraction & Bootloader Force</h3>
+            <p>Sends [0xff, 0x81, 0xd4] memory dump frame to extract pairing keys or [0xff, 0x80, 0xf0] to force bootloader mode.</p>
+            <div class="attack-actions">
+              <button class="btn btn-danger btn-sm" id="btnAttackUnifying">Simulate Attack</button>
+            </div>
+          </div>
+
+          <!-- Vector 4: Zelotes T90 Mouse -->
+          <div class="attack-card">
+            <div class="attack-meta">
+              <span class="attack-target">Zelotes T90 / Speedlink Holtek</span>
+              <span class="attack-cve">Feature 7 Memory Hijack</span>
+            </div>
+            <h3>Holtek 0x18 Feature 7 Macro Flash</h3>
+            <p>Injects opcode 0x03 and 0x09 macro byte stream onto gaming mouse internal profile memory.</p>
+            <div class="attack-actions">
+              <button class="btn btn-danger btn-sm" id="btnAttackZelotes">Simulate Attack</button>
+            </div>
+          </div>
+
+          <!-- Vector 5: Foot Switch -->
+          <div class="attack-card">
+            <div class="attack-meta">
+              <span class="attack-target">PCsensor USB Foot Switch</span>
+              <span class="attack-cve">Report 0 Macro Upload</span>
+            </div>
+            <h3>Foot Switch Keystroke Scripting (0x01 0xc0)</h3>
+            <p>Attempts to flash persistent command execution sequence onto USB foot pedal.</p>
+            <div class="attack-actions">
+              <button class="btn btn-danger btn-sm" id="btnAttackFoot">Simulate Attack</button>
+            </div>
+          </div>
+
+          <!-- Vector 6: WebMIDI SysEx Flashing -->
+          <div class="attack-card">
+            <div class="attack-meta">
+              <span class="attack-target">Novation Launchpad MK2</span>
+              <span class="attack-cve">WebMIDI Controller Flashing</span>
+            </div>
+            <h3>SysEx Bootloader Flasher Frame (F0 ... F7)</h3>
+            <p>Dispatches manufacturer sysex packet (0x00 0x20 0x29 0x00 0x71) targeting firmware bootloader.</p>
+            <div class="attack-actions">
+              <button class="btn btn-danger btn-sm" id="btnAttackMIDI">Simulate Attack</button>
+              <button class="btn btn-secondary btn-sm" id="btnBenignMIDI">Send Normal Note</button>
+            </div>
+          </div>
+
+          <!-- Vector 7: WebSerial Hayes Modem -->
+          <div class="attack-card">
+            <div class="attack-meta">
+              <span class="attack-target">Fibocom L850-GL Modem</span>
+              <span class="attack-cve">WebSerial SMS Exfiltration</span>
+            </div>
+            <h3>AT+CMGS SMS Transmission & AT^FLASH</h3>
+            <p>Transmits AT+CMGS and AT+CPIN commands into WebSerial output stream.</p>
+            <div class="attack-actions">
+              <button class="btn btn-danger btn-sm" id="btnAttackSerial">Simulate Attack</button>
+              <button class="btn btn-secondary btn-sm" id="btnBenignSerial">Send Safe AT Ping</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Live Output & Physical Connector -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Live Security Audit Terminal</h2>
+          <button class="btn btn-secondary btn-xs" id="btnClearLog">Clear Log</button>
+        </div>
+        <p class="panel-desc">Real-time inspection output from browser APIs and simulated peripheral endpoints.</p>
+
+        <div class="console-box" id="consoleBox">
+          <div class="log-line info">[System] PeripheralShield Verification Testbed initialized.</div>
+          <div class="log-line info">[System] Click any 'Simulate Attack' button on the left to verify blocking.</div>
+        </div>
+
+        <div class="physical-device-card mt-4">
+          <div class="panel-header">
+            <h3>Physical Hardware Live Test</h3>
+            <span class="badge badge-primary">Actual Device</span>
+          </div>
+          <p class="panel-desc">Plug in an actual WebHID device (e.g. Logitech mouse, macropad) and request connection through the browser dialog.</p>
+          <div class="device-actions">
+            <button class="btn btn-primary" id="btnConnectPhysicalHID">Connect WebHID Device</button>
+            <button class="btn btn-secondary" id="btnConnectPhysicalSerial">Connect WebSerial Port</button>
+          </div>
+          <div id="connectedDeviceStatus" class="connected-device-info mt-2">
+            No physical hardware connected yet.
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="testbed.js"></script>
+</body>
+</html>

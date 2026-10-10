@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PeripheralShield</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-brand">
+        <div class="shield-logo">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="title">PeripheralShield</h1>
+          <span class="subtitle">Hardware API Defense</span>
+        </div>
+      </div>
+      <div id="statusBadge" class="mode-badge balanced">Balanced</div>
+    </header>
+
+    <!-- Origin Card -->
+    <section class="card origin-card">
+      <div class="origin-info">
+        <span class="label">Current Origin</span>
+        <div id="originDisplay" class="origin-url">Loading...</div>
+      </div>
+      <button id="toggleOriginBtn" class="btn btn-secondary btn-sm" title="Toggle site allowlist">
+        <span id="originBtnIcon">🛡️</span>
+        <span id="originBtnText">Trust Site</span>
+      </button>
+    </section>
+
+    <!-- Protection Stats -->
+    <section class="stats-row">
+      <div class="stat-card">
+        <span class="stat-value" id="blockedCount">0</span>
+        <span class="stat-label">Attacks Blocked</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="connectedCount">0</span>
+        <span class="stat-label">Active Devices</span>
+      </div>
+    </section>
+
+    <!-- Policy Mode Switcher -->
+    <section class="card mode-section">
+      <div class="section-title">Enforcement Policy</div>
+      <div class="mode-buttons">
+        <button class="mode-btn" data-mode="Strict">
+          <span class="mode-btn-title">Strict</span>
+          <span class="mode-btn-desc">Block all writes</span>
+        </button>
+        <button class="mode-btn active" data-mode="Balanced">
+          <span class="mode-btn-title">Balanced</span>
+          <span class="mode-btn-desc">Inspect & block exploits</span>
+        </button>
+        <button class="mode-btn" data-mode="Permissive">
+          <span class="mode-btn-title">Permissive</span>
+          <span class="mode-btn-desc">Allow all writes</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Connected Devices Tab -->
+    <section class="card devices-section">
+      <div class="section-header">
+        <div class="section-title">Connected Peripherals</div>
+        <span id="devicesCountBadge" class="badge-pill">0</span>
+      </div>
+      <div id="devicesList" class="devices-list">
+        <div class="empty-state">No WebHID/Serial/MIDI devices active on this page.</div>
+      </div>
+    </section>
+
+    <!-- Recent Blocked Events -->
+    <section class="card logs-section">
+      <div class="section-header">
+        <div class="section-title">Recent Interceptions</div>
+      </div>
+      <div id="recentLogsList" class="recent-logs-list">
+        <div class="empty-state">No attacks blocked in this session.</div>
+      </div>
+    </section>
+
+    <!-- Footer Links -->
+    <footer class="footer">
+      <button id="openOptionsBtn" class="btn btn-primary btn-block">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        Security Dashboard & Audit Log
+      </button>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

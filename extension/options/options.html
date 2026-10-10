@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PeripheralShield - Hardware Security Dashboard</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="shield-logo">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="sidebar-title">PeripheralShield</h1>
+          <span class="sidebar-subtitle">Enterprise Defense</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-tab="overview">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Overview & Stats
+        </button>
+        <button class="nav-item" data-tab="devices">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          Device Inventory
+        </button>
+        <button class="nav-item" data-tab="allowlist">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          Origin Allowlist
+        </button>
+        <button class="nav-item" data-tab="audit">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Audit Log & SIEM
+        </button>
+        <button class="nav-item" data-tab="estimator">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          Threat Estimator
+        </button>
+        <button class="nav-item" data-tab="enterprise">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          Enterprise & Import/Export
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="version-tag">Version 1.0.0 | Manifest V3</div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top Banner / Alert -->
+      <div id="statusToast" class="notification-banner hidden"></div>
+
+      <!-- Tab: Overview -->
+      <div id="tab-overview" class="tab-pane active">
+        <div class="page-header">
+          <h2>Security Overview & Threat Stats</h2>
+          <p class="text-muted">Real-time protection status against WebHID, WebSerial, and WebMIDI peripheral attack vectors.</p>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-card danger">
+            <div class="metric-header">
+              <span class="metric-title">Attacks Blocked</span>
+              <span class="metric-badge">All-Time</span>
+            </div>
+            <div class="metric-value" id="statBlockedTotal">0</div>
+            <div class="metric-footer">Hardware macro writes prevented</div>
+          </div>
+          <div class="metric-card primary">
+            <div class="metric-header">
+              <span class="metric-title">Enforcement Mode</span>
+              <span class="metric-badge" id="statCurrentMode">Balanced</span>
+            </div>
+            <div class="metric-value font-md" id="statModeDisplay">Balanced</div>
+            <div class="metric-footer">Inspects & blocks dangerous opcodes</div>
+          </div>
+          <div class="metric-card warning">
+            <div class="metric-header">
+              <span class="metric-title">Vulnerable Devices</span>
+              <span class="metric-badge">Database</span>
+            </div>
+            <div class="metric-value" id="statDevicesInDb">15</div>
+            <div class="metric-footer">Logitech, CH57X, Zelotes, MIDI, etc.</div>
+          </div>
+          <div class="metric-card success">
+            <div class="metric-header">
+              <span class="metric-title">Allowlisted Sites</span>
+              <span class="metric-badge">Trusted</span>
+            </div>
+            <div class="metric-value" id="statOriginsTotal">0</div>
+            <div class="metric-footer">Origins permitted full access</div>
+          </div>
+        </div>
+
+        <!-- Mode Configuration Card -->
+        <div class="card mt-4">
+          <h3 class="card-title">Global Policy Mode</h3>
+          <p class="text-muted mb-3">Select the default operational stance for all web applications querying peripheral devices.</p>
+          <div class="mode-select-grid">
+            <label class="mode-option" id="modeOptStrict">
+              <input type="radio" name="policyMode" value="Strict">
+              <div class="mode-option-content">
+                <div class="mode-option-title">Strict Mode (Zero Trust)</div>
+                <div class="mode-option-desc">Blocks ALL outbound writes, feature reports, and SysEx messages to all HIDs, Modems, and MIDI controllers. Only allowlisted origins can communicate.</div>
+              </div>
+            </label>
+            <label class="mode-option active" id="modeOptBalanced">
+              <input type="radio" name="policyMode" value="Balanced" checked>
+              <div class="mode-option-content">
+                <div class="mode-option-title">Balanced Mode (Recommended)</div>
+                <div class="mode-option-desc">Permits safe, benign peripheral operations (e.g., DPI reads, normal audio controls) while strictly blocking macro updates, onboard memory flashing, and bootloader overrides.</div>
+              </div>
+            </label>
+            <label class="mode-option" id="modeOptPermissive">
+              <input type="radio" name="policyMode" value="Permissive">
+              <div class="mode-option-content">
+                <div class="mode-option-title">Permissive Mode (Audit Only)</div>
+                <div class="mode-option-desc">Allows all hardware requests to execute unhindered, but logs detected exploit signatures and dangerous payloads to the audit log for inspection.</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Protected Vectors Summary -->
+        <div class="card mt-4">
+          <h3 class="card-title">Protected Peripheral Vectors (PeripheralInstinct Research)</h3>
+          <div class="vectors-grid mt-2">
+            <div class="vector-item">
+              <span class="vector-tag">Logitech HID++</span>
+              <p>Blocks Feature 0x8100 onboard memory writes, HID++ 1.0 subId 0x90/0x91 macro memory overwrites, and Unifying CVE-2019-13055 key dump commands.</p>
+            </div>
+            <div class="vector-item">
+              <span class="vector-tag">CH57X Keyboards</span>
+              <p>Blocks WCH CH57X macropad Report 3 reprogramming commands (0xa1 / 0xaa) used to inject silent Run/PowerShell keyboard sequences.</p>
+            </div>
+            <div class="vector-item">
+              <span class="vector-tag">Zelotes & Speedlink</span>
+              <p>Intercepts Holtek-based gaming mice Feature 7 memory bank writes (opcodes 0x03, 0x09, 0x10) that remap mouse click buttons to malicious keyboard shortcuts.</p>
+            </div>
+            <div class="vector-item">
+              <span class="vector-tag">WebMIDI SysEx</span>
+              <p>Guards against Novation Launchpad MK2 and SysEx controller firmware overwrite frames (F0 ... F7) capable of re-flashing device controllers.</p>
+            </div>
+            <div class="vector-item">
+              <span class="vector-tag">WebSerial Modems</span>
+              <p>Inspects serial streams for Hayes AT modem commands (AT+CMGS, AT+CPIN, AT^FLASH) attempting SMS exfiltration or modem hijacking.</p>
+            </div>
+            <div class="vector-item">
+              <span class="vector-tag">Roccat & Redragon</span>
+              <p>Blocks multi-report configuration dumps on Roccat Kone Aimo and Redragon peripherals that rebind profiles to keystroke sequences.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Devices -->
+      <div id="tab-devices" class="tab-pane">
+        <div class="page-header">
+          <h2>Known Peripheral Vulnerability Database</h2>
+          <p class="text-muted">Catalog of vulnerable devices analyzed from the PeripheralInstinct testbed. You can specify custom per-device override rules.</p>
+        </div>
+
+        <div class="filter-bar">
+          <input type="text" id="deviceSearchInput" class="form-input" placeholder="Search by device name, VID, or PID...">
+          <select id="deviceRiskFilter" class="form-select">
+            <option value="ALL">All Risk Levels</option>
+            <option value="CRITICAL">Critical</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+          </select>
+        </div>
+
+        <div class="table-container mt-3">
+          <table class="data-table" id="devicesTable">
+            <thead>
+              <tr>
+                <th>Device Name</th>
+                <th>VID:PID</th>
+                <th>Protocol</th>
+                <th>Risk Level</th>
+                <th>Known Exploit</th>
+                <th>Policy Override</th>
+              </tr>
+            </thead>
+            <tbody id="devicesTableBody">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab: Origin Allowlist -->
+      <div id="tab-allowlist" class="tab-pane">
+        <div class="page-header">
+          <h2>Origin Allowlist (Trusted Domains)</h2>
+          <p class="text-muted">Web applications hosted on these origins are permitted to access WebHID, WebSerial, and WebMIDI without security interception.</p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Add Trusted Origin</h3>
+          <div class="form-row mt-2">
+            <input type="text" id="newOriginInput" class="form-input" placeholder="e.g. https://my-hardware-configurator.example.com">
+            <button id="addOriginBtn" class="btn btn-primary">Add to Allowlist</button>
+          </div>
+          <span class="text-muted text-sm mt-1">Note: Enter full protocol and origin (e.g. https://domain.com). Wildcards are not recommended for hardware APIs.</span>
+        </div>
+
+        <div class="table-container mt-4">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Allowlisted Origin</th>
+                <th>Added Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="allowlistTableBody">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab: Audit Log -->
+      <div id="tab-audit" class="tab-pane">
+        <div class="page-header d-flex justify-between align-center">
+          <div>
+            <h2>Audit Log & SIEM Security Telemetry</h2>
+            <p class="text-muted">Detailed chronological log of intercepted hardware API calls, blocked opcodes, and anomalous write attempts.</p>
+          </div>
+          <div class="d-flex gap-2">
+            <button id="clearLogsBtn" class="btn btn-secondary">Clear Logs</button>
+            <button id="exportLogsJsonBtn" class="btn btn-secondary">Export JSON</button>
+            <button id="exportLogsCsvBtn" class="btn btn-primary">Export CSV</button>
+          </div>
+        </div>
+
+        <div class="filter-bar mt-3">
+          <input type="text" id="logSearchInput" class="form-input" placeholder="Filter by origin, device, or reason...">
+          <select id="logRiskFilter" class="form-select">
+            <option value="ALL">All Risk Levels</option>
+            <option value="CRITICAL">Critical Only</option>
+            <option value="HIGH">High Only</option>
+            <option value="MEDIUM">Medium Only</option>
+          </select>
+        </div>
+
+        <div class="table-container mt-3">
+          <table class="data-table" id="auditTable">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Origin</th>
+                <th>Target Peripheral</th>
+                <th>API / Method</th>
+                <th>Security Reason</th>
+                <th>Risk</th>
+              </tr>
+            </thead>
+            <tbody id="auditTableBody">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab: Threat Estimator -->
+      <div id="tab-estimator" class="tab-pane">
+        <div class="page-header">
+          <h2>Heuristic HID Threat Estimator</h2>
+          <p class="text-muted">Ported from the PeripheralInstinct mitigation research tool. Evaluates HID collections, endpoints, report sizes, and usage pages to calculate peripheral risk scores (0-100).</p>
+        </div>
+
+        <div class="grid-2-col">
+          <div class="card">
+            <h3 class="card-title">Test Device or Input Descriptor</h3>
+            <p class="text-muted mb-2">Inspect a connected WebHID device live, or paste a device report descriptor JSON below.</p>
+            <button id="estimatorConnectBtn" class="btn btn-primary mb-3">Inspect Connected WebHID Device</button>
+            <div class="form-group">
+              <label class="form-label">Or Paste Mock Device Collections (JSON)</label>
+              <textarea id="mockDescriptorInput" class="form-textarea" rows="8">{
+  "vendorId": 1133,
+  "productId": 49275,
+  "productName": "Logitech G502 HERO Gaming Mouse",
+  "collections": [
+    { "usagePage": 65280, "usage": 1, "inputReports": [{ "reportId": 16, "reportSize": 8 }], "outputReports": [{ "reportId": 16, "reportSize": 8 }] },
+    { "usagePage": 1, "usage": 6, "inputReports": [{ "reportId": 1, "reportSize": 8 }] },
+    { "usagePage": 1, "usage": 2, "inputReports": [{ "reportId": 2, "reportSize": 8 }] }
+  ]
+}</textarea>
+            </div>
+            <button id="estimatorAnalyzeBtn" class="btn btn-secondary mt-2">Analyze Descriptor</button>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">Threat Assessment Result</h3>
+            <div id="estimatorResults" class="estimator-result-card">
+              <div class="score-display">
+                <div class="score-circle" id="scoreCircle">0</div>
+                <div class="score-meta">
+                  <div class="score-label" id="scoreLabel">No Assessment</div>
+                  <div class="score-sub" id="scoreSub">Click 'Analyze Descriptor' to evaluate</div>
+                </div>
+              </div>
+              <div class="threat-breakdown mt-3" id="threatBreakdown">
+                <!-- Breakdown items -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Enterprise -->
+      <div id="tab-enterprise" class="tab-pane">
+        <div class="page-header">
+          <h2>Enterprise Policy & Configuration Backup</h2>
+          <p class="text-muted">Manage enterprise deployment, inspect active Managed Policies (`chrome.storage.managed`), and backup settings.</p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Active Enterprise Deployment Status</h3>
+          <div class="status-box mt-2" id="managedPolicyStatusBox">
+            <div class="status-indicator" id="managedStatusIndicator"></div>
+            <div>
+              <div class="status-title" id="managedStatusTitle">Unmanaged Extension Instance</div>
+              <div class="status-desc" id="managedStatusDesc">Running with local browser configuration. Enterprise Managed Storage (`chrome.storage.managed`) is inactive.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2-col mt-4">
+          <div class="card">
+            <h3 class="card-title">Export Settings</h3>
+            <p class="text-muted mb-3">Backup current policy mode, device overrides, and allowlisted origins to a JSON file.</p>
+            <button id="exportSettingsBtn" class="btn btn-primary">Download Backup (JSON)</button>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">Import Settings</h3>
+            <p class="text-muted mb-3">Restore settings from an existing PeripheralShield configuration backup.</p>
+            <input type="file" id="importFileInput" accept=".json" class="d-none">
+            <button id="importSettingsBtn" class="btn btn-secondary">Select JSON Backup File</button>
+          </div>
+        </div>
+
+        <div class="card mt-4">
+          <h3 class="card-title">Native Messaging Companion Status</h3>
+          <p class="text-muted mb-2">PeripheralShield connects to an optional OS-level Python or Node.js native host for SIEM event ingestion.</p>
+          <div class="code-box">
+            <code>Host Identifier: com.defensive.extension.host</code>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

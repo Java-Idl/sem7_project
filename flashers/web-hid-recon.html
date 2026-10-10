@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebHID Device Recon</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #14171c;
+    --border: #262b33;
+    --accent: #5ec9ff;
+    --ok: #4ade80;
+    --warn: #f59e0b;
+    --danger: #f87171;
+    --text: #dfe4ea;
+    --muted: #7c8798;
+    --mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 32px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 12.5px;
+    margin-bottom: 24px;
+  }
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  button {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 9px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary {
+    background: var(--accent);
+    color: #06131c;
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  button.primary:hover { opacity: 0.9; color: #06131c; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .support-warning {
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    display: none;
+  }
+
+  .device-block {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  .device-head {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .device-name {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .device-ids {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .device-body {
+    padding: 16px 20px;
+  }
+  .flag-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .flag {
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+  .flag.ok { border-color: var(--ok); color: var(--ok); }
+  .flag.warn { border-color: var(--warn); color: var(--warn); }
+  .flag.danger { border-color: var(--danger); color: var(--danger); background: rgba(248,113,113,0.08); }
+  .flag.info { border-color: var(--muted); color: var(--muted); }
+
+  .collection {
+    border-left: 2px solid var(--border);
+    padding-left: 14px;
+    margin-bottom: 14px;
+  }
+  .collection-head {
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .collection-head .k { color: var(--muted); }
+  .collection-head .v { color: var(--accent); }
+
+  .report-group { margin-left: 8px; margin-bottom: 4px; }
+  .report-group-label { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px;}
+  .report-line { padding: 2px 0 2px 10px; color: var(--text); }
+  .report-line .rid { color: var(--warn); }
+  .report-line .bytes { color: var(--danger); font-weight: 600; }
+
+  .item-detail {
+    margin-left: 20px;
+    color: var(--muted);
+    font-size: 11.5px;
+    padding: 1px 0;
+  }
+
+  .empty-state {
+    color: var(--muted);
+    text-align: center;
+    padding: 60px 20px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+  }
+
+  .verdict {
+    margin-top: 16px;
+    padding: 12px 14px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    border: 1px solid var(--border);
+  }
+  .verdict.exploitable {
+    border-color: var(--danger);
+    background: rgba(248,113,113,0.06);
+    color: var(--danger);
+  }
+  .verdict.clean {
+    border-color: var(--ok);
+    background: rgba(74,222,128,0.06);
+    color: var(--ok);
+  }
+
+  details { margin-top: 8px; }
+  summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  pre {
+    background: #0b0d10;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-top: 8px;
+    font-size: 11px;
+    overflow-x: auto;
+    color: var(--muted);
+  }
+
+  .export-row {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+  }
+</style>
+</head>
+<body>
+
+  <h1>WebHID Device Recon</h1>
+  <div class="subtitle">Enumerates every HID collection/report a connected device exposes to the browser. Diagnostic only — no reports are written.</div>
+
+  <div class="support-warning" id="supportWarning">
+    navigator.hid is not available in this browser. Use Chrome or Edge.
+  </div>
+
+  <div class="toolbar">
+    <button class="primary" id="addDeviceBtn">+ Add device (requestDevice)</button>
+    <button id="listGrantedBtn">List already-granted devices</button>
+    <button id="exportBtn">Export report as JSON</button>
+    <button id="clearBtn">Clear all</button>
+  </div>
+
+  <div id="devices">
+    <div class="empty-state" id="emptyState">No devices scanned yet. Click "Add device" and pick a webcam from the chooser.</div>
+  </div>
+
+<script>
+  const devicesEl = document.getElementById('devices');
+  const emptyState = document.getElementById('emptyState');
+  const supportWarning = document.getElementById('supportWarning');
+  const addDeviceBtn = document.getElementById('addDeviceBtn');
+  const listGrantedBtn = document.getElementById('listGrantedBtn');
+  const exportBtn = document.getElementById('exportBtn');
+  const clearBtn = document.getElementById('clearBtn');
+
+  let scanResults = []; // accumulated structured results for export
+
+  if (!('hid' in navigator)) {
+    supportWarning.style.display = 'block';
+    addDeviceBtn.disabled = true;
+    listGrantedBtn.disabled = true;
+  }
+
+  function collectionType(t) {
+    const types = {0: 'Physical', 1: 'Application', 2: 'Logical', 3: 'Report', 4: 'Named Array', 5: 'Usage Switch', 6: 'Usage Modified'};
+    return types[t] || (t >= 0x80 ? 'Vendor-defined' : 'Reserved');
+  }
+
+  function maxReportBytes(report) {
+    // Sum of (reportSize * reportCount) bits across items, converted to bytes.
+    let bits = 0;
+    for (const item of report.items) {
+      bits += (item.reportSize || 0) * (item.reportCount || 0);
+    }
+    return Math.ceil(bits / 8);
+  }
+
+  function renderReportGroup(label, reports) {
+    if (!reports || reports.length === 0) return '';
+    let html = `<div class="report-group"><div class="report-group-label">${label}</div>`;
+    reports.forEach(r => {
+      const bytes = maxReportBytes(r);
+      const bytesClass = bytes > 64 ? 'bytes' : '';
+      html += `<div class="report-line">reportId=<span class="rid">${r.reportId}</span> · items=${r.items.length} · size=<span class="${bytesClass}">${bytes}B</span></div>`;
+      r.items.forEach(item => {
+        const usages = item.isRange
+          ? `range 0x${(item.usageMinimum||0).toString(16)}–0x${(item.usageMaximum||0).toString(16)}`
+          : `usages [${(item.usages||[]).map(u => '0x'+u.toString(16)).join(', ')}]`;
+        html += `<div class="item-detail">· ${usages} · reportSize=${item.reportSize} × reportCount=${item.reportCount} · const=${item.isConstant} array=${item.isArray}</div>`;
+      });
+    });
+    html += `</div>`;
+    return html;
+  }
+
+  function renderCollection(c, depth) {
+    let html = `<div class="collection" style="margin-left:${depth*12}px">`;
+    html += `<div class="collection-head"><span class="k">usagePage=</span><span class="v">0x${c.usagePage.toString(16).padStart(4,'0')}</span> <span class="k">usage=</span><span class="v">0x${c.usage.toString(16).padStart(4,'0')}</span> <span class="k">type=</span><span class="v">${collectionType(c.type)}</span></div>`;
+    html += renderReportGroup('Input reports', c.inputReports);
+    html += renderReportGroup('Output reports', c.outputReports);
+    html += renderReportGroup('Feature reports', c.featureReports);
+    if (c.children && c.children.length) {
+      c.children.forEach(child => { html += renderCollection(child, depth + 1); });
+    }
+    html += `</div>`;
+    return html;
+  }
+
+  function flattenReports(collections) {
+    let out = [];
+    function walk(cols) {
+      cols.forEach(c => {
+        ['inputReports','outputReports','featureReports'].forEach(kind => {
+          (c[kind]||[]).forEach(r => out.push({kind, usagePage: c.usagePage, usage: c.usage, reportId: r.reportId, bytes: maxReportBytes(r)}));
+        });
+        if (c.children) walk(c.children);
+      });
+    }
+    walk(collections);
+    return out;
+  }
+
+  function computeVerdict(device, flatReports) {
+    // Heuristic from Trampert et al. (WWW'25) Section 8.6:
+    // exploitable candidates implement Keyboard/Keypad usage page (0x07)
+    // AND expose output/feature reports reachable via WebHID.
+    // High-capacity (>64B) reports correlate with config/macro/firmware channels.
+    const hasKeyboardUsage = device.collections.some(c => c.usagePage === 0x07 || c.usagePage === 0x0c);
+    const writableReports = flatReports.filter(r => r.kind !== 'inputReports');
+    const highCapacity = writableReports.filter(r => r.bytes > 64);
+    const anyWritable = writableReports.length > 0;
+
+    const flags = [];
+    if (writableReports.length > 0) flags.push({label: `${writableReports.length} writable report(s)`, cls: 'warn'});
+    else flags.push({label: 'no writable reports', cls: 'ok'});
+    if (highCapacity.length > 0) flags.push({label: `${highCapacity.length} report(s) > 64B`, cls: 'danger'});
+    if (hasKeyboardUsage) flags.push({label: 'keyboard/keypad usage page present', cls: 'danger'});
+
+    let verdictText, verdictClass;
+    if (anyWritable && highCapacity.length > 0) {
+      verdictClass = 'exploitable';
+      verdictText = 'Candidate for deeper analysis: writable reports with payload capacity beyond a simple toggle. Capture USB traffic while exercising vendor software to identify what these reports control.';
+    } else if (anyWritable) {
+      verdictClass = 'exploitable';
+      verdictText = 'Writable reports present but small (≤64B) — likely simple state toggles (LED, mode switch). Still worth checking whether any correspond to a recording/privacy-indicator control.';
+    } else {
+      verdictClass = 'clean';
+      verdictText = 'No output/feature reports reachable from WebHID. Likely input-only or the relevant functionality is blocked by the Chromium HID blocklist / handled purely over UVC.';
+    }
+    return {flags, verdictText, verdictClass};
+  }
+
+  function renderDevice(device, index) {
+    emptyState.style.display = 'none';
+    const flatReports = flattenReports(device.collections);
+    const {flags, verdictText, verdictClass} = computeVerdict(device, flatReports);
+
+    const block = document.createElement('div');
+    block.className = 'device-block';
+
+    const collectionsHtml = device.collections.map(c => renderCollection(c, 0)).join('');
+
+    block.innerHTML = `
+      <div class="device-head">
+        <div class="device-name">${device.productName || 'Unnamed device'}</div>
+        <div class="device-ids">vendorId=0x${device.vendorId.toString(16)} productId=0x${device.productId.toString(16)}</div>
+      </div>
+      <div class="device-body">
+        <div class="flag-row">
+          ${flags.map(f => `<span class="flag ${f.cls}">${f.label}</span>`).join('')}
+          <span class="flag info">${device.collections.length} top-level collection(s)</span>
+        </div>
+        ${collectionsHtml || '<div style="color:var(--muted)">No collections reported.</div>'}
+        <div class="verdict ${verdictClass}">${verdictText}</div>
+        <details>
+          <summary>raw collections JSON</summary>
+          <pre>${JSON.stringify(device.collections, (k,v) => typeof v === 'bigint' ? v.toString() : v, 2)}</pre>
+        </details>
+      </div>
+    `;
+    devicesEl.appendChild(block);
+
+    scanResults.push({
+      productName: device.productName,
+      vendorId: device.vendorId,
+      productId: device.productId,
+      collections: device.collections,
+      flatReports,
+      verdict: verdictText
+    });
+  }
+
+  async function scanDevice(device) {
+    try {
+      // Opening isn't required to read the collection tree (that's populated
+      // at requestDevice time), but some browsers only populate report detail
+      // after open(). We open read-only for enumeration and close immediately.
+      if (!device.opened) {
+        await device.open();
+      }
+      renderDevice(device, scanResults.length);
+      await device.close();
+    } catch (err) {
+      renderDevice(device, scanResults.length); // still show what we got
+      console.warn('open/close issue (enumeration still works from requestDevice):', err);
+    }
+  }
+
+  addDeviceBtn.addEventListener('click', async () => {
+    try {
+      const devices = await navigator.hid.requestDevice({ filters: [] });
+      for (const d of devices) await scanDevice(d);
+    } catch (err) {
+      alert('requestDevice failed: ' + err.message);
+    }
+  });
+
+  listGrantedBtn.addEventListener('click', async () => {
+    const devices = await navigator.hid.getDevices();
+    if (devices.length === 0) {
+      alert('No devices have been previously granted to this origin.');
+      return;
+    }
+    for (const d of devices) await scanDevice(d);
+  });
+
+  exportBtn.addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(scanResults, (k,v) => typeof v === 'bigint' ? v.toString() : v, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `webhid-recon-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  clearBtn.addEventListener('click', () => {
+    devicesEl.innerHTML = '';
+    devicesEl.appendChild(emptyState);
+    emptyState.style.display = 'block';
+    scanResults = [];
+  });
+</script>
+
+</body>
+</html>

