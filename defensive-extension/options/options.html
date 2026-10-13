@@ -287,13 +287,19 @@
             <p class="text-muted mb-2">Inspect a connected WebHID device live, or paste a device report descriptor JSON below.</p>
             <button id="estimatorConnectBtn" class="btn btn-primary mb-3">Inspect Connected WebHID Device</button>
             <div class="form-group">
-              <label class="form-label">Or Paste Mock Device Collections (JSON)</label>
+              <label class="form-label">Descriptor Presets & Custom Input</label>
+              <div class="preset-buttons mb-2" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <button type="button" class="btn btn-secondary btn-xs preset-btn" data-preset="g502">Logitech G502 HERO</button>
+                <button type="button" class="btn btn-secondary btn-xs preset-btn" data-preset="ch57x">CH57X Macropad</button>
+                <button type="button" class="btn btn-secondary btn-xs preset-btn" data-preset="office-mouse">Standard Mouse</button>
+                <button type="button" class="btn btn-secondary btn-xs preset-btn" data-preset="office-kb">Standard Keyboard</button>
+              </div>
               <textarea id="mockDescriptorInput" class="form-textarea" rows="8">{
   "vendorId": 1133,
   "productId": 49275,
   "productName": "Logitech G502 HERO Gaming Mouse",
   "collections": [
-    { "usagePage": 65280, "usage": 1, "inputReports": [{ "reportId": 16, "reportSize": 8 }], "outputReports": [{ "reportId": 16, "reportSize": 8 }] },
+    { "usagePage": 65280, "usage": 1, "inputReports": [{ "reportId": 16, "reportSize": 8 }, { "reportId": 17, "reportSize": 20 }], "outputReports": [{ "reportId": 16, "reportSize": 8 }, { "reportId": 17, "reportSize": 20 }] },
     { "usagePage": 1, "usage": 6, "inputReports": [{ "reportId": 1, "reportSize": 8 }] },
     { "usagePage": 1, "usage": 2, "inputReports": [{ "reportId": 2, "reportSize": 8 }] }
   ]
@@ -303,17 +309,46 @@
           </div>
 
           <div class="card">
-            <h3 class="card-title">Threat Assessment Result</h3>
+            <div class="d-flex justify-between align-center mb-2">
+              <h3 class="card-title">Threat Assessment Result</h3>
+              <span id="threatLevelBadge" class="risk-tag critical">CRITICAL</span>
+            </div>
             <div id="estimatorResults" class="estimator-result-card">
               <div class="score-display">
-                <div class="score-circle" id="scoreCircle">0</div>
+                <div class="score-circle" id="scoreCircle">--</div>
                 <div class="score-meta">
                   <div class="score-label" id="scoreLabel">No Assessment</div>
                   <div class="score-sub" id="scoreSub">Click 'Analyze Descriptor' to evaluate</div>
                 </div>
               </div>
-              <div class="threat-breakdown mt-3" id="threatBreakdown">
-                <!-- Breakdown items -->
+
+              <!-- Multi-Vector Assessment -->
+              <div class="vector-breakdown-section mt-3">
+                <div class="section-subhead">Attack Surface Vectors</div>
+                <div id="threatVectorsList" class="threat-vectors-list">
+                  <!-- Populated dynamically -->
+                </div>
+              </div>
+
+              <!-- Discovered Endpoints Telemetry -->
+              <div class="endpoints-telemetry-section mt-3">
+                <div class="section-subhead">Discovered Report Endpoints</div>
+                <div class="table-container mt-1" style="max-height: 180px; overflow-y: auto;">
+                  <table class="data-table telemetry-table">
+                    <thead>
+                      <tr>
+                        <th>Report ID</th>
+                        <th>Type</th>
+                        <th>Buffer Size</th>
+                        <th>Role</th>
+                        <th>Channel Risk</th>
+                      </tr>
+                    </thead>
+                    <tbody id="estimatorEndpointsBody">
+                      <!-- Populated dynamically -->
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
@@ -364,6 +399,6 @@
     </main>
   </div>
 
-  <script src="options.js"></script>
+  <script type="module" src="options.js"></script>
 </body>
 </html>

@@ -81,12 +81,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const isAllowed = (state.originAllowlist || []).includes(currentOrigin);
     if (isAllowed) {
       toggleOriginBtn.classList.add('allowed');
-      originBtnText.textContent = 'Trusted';
-      originBtnIcon.textContent = '✓';
+      originBtnText.textContent = 'Authorized';
     } else {
       toggleOriginBtn.classList.remove('allowed');
-      originBtnText.textContent = 'Trust Site';
-      originBtnIcon.textContent = '🛡️';
+      originBtnText.textContent = 'Authorize Site';
     }
 
     // D. Connected Peripherals

@@ -28,10 +28,30 @@ export function runParserTests(assert) {
     assert(res2.opType, 'unifying_key_extraction', 'HID++: OpType should be unifying_key_extraction');
 
     // C. HID++ 2.0 Feature 0x8100 Onboard Memory Write Transaction (Function 0x06)
-    const featureMap = new Map([[0x07, 0x8100]]);
+    const featureMap = new Map([[0x07, 0x8100], [0x08, 0x8061], [0x09, 0x8110]]);
     const writePageStart = new Uint8Array([0x01, 0x07, 0x6a, 0x00, 0x02, 0x00]); // functionId 6 = writePage
     const res3 = HIDppParser.parseReport(0x11, writePageStart, featureMap);
     assert(res3.isDangerous, true, 'HID++: Should block Feature 0x8100 writePage transaction');
+
+    // C2. HID++ 2.0 Feature 0x8100 Direct Macro Execution (Function 0x05)
+    const execMacro = new Uint8Array([0x01, 0x07, 0x5a, 0x00, 0x06, 0x00]);
+    const res3b = HIDppParser.parseReport(0x10, execMacro, featureMap);
+    assert(res3b.isDangerous, true, 'HID++: Should block Feature 0x8100 direct macro execution');
+
+    // C3. HID++ 2.0 Feature 0x8061 Button Remapping (Function 0x01)
+    const setRemap = new Uint8Array([0x01, 0x08, 0x1a, 0x01, 0x00, 0x00]);
+    const res3c = HIDppParser.parseReport(0x10, setRemap, featureMap);
+    assert(res3c.isDangerous, true, 'HID++: Should block Feature 0x8061 button remapping');
+
+    // C4. HID++ 2.0 Feature 0x8110 Button Spy Activation (Function 0x01)
+    const spyActivate = new Uint8Array([0x01, 0x09, 0x1a, 0x01, 0x00]);
+    const res3d = HIDppParser.parseReport(0x10, spyActivate, featureMap);
+    assert(res3d.isDangerous, true, 'HID++: Should block Feature 0x8110 button spy activation');
+
+    // C5. HID++ 2.0 Heuristic Block for unmapped sector prepare packet
+    const rawPreparePacket = new Uint8Array([0x01, 0x0c, 0x6a, 0x00, 0x06, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00]);
+    const res3e = HIDppParser.parseReport(0x11, rawPreparePacket, new Map()); // empty map!
+    assert(res3e.isDangerous, true, 'HID++: Should heuristically block unmapped sector prepare packet');
 
     // D. HID++ 2.0 Safe Feature Query (GetFeature)
     const getFeature = new Uint8Array([0xff, 0x00, 0x0a, 0x81, 0x00]); // query feature 0x8100

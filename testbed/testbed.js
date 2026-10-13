@@ -35,13 +35,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (isActive) {
-      extensionStatus.textContent = '🛡️ PeripheralShield Active (Protected)';
+      extensionStatus.textContent = '[ENFORCING] Interceptor Active';
       extensionStatus.className = 'ext-status-pill active';
-      log('PeripheralShield MAIN-world interceptor detected! Native prototypes frozen.', 'success');
+      log('PeripheralShield MAIN-world interceptor detected. Native prototypes locked.', 'success');
     } else {
-      extensionStatus.textContent = '⚠️ Unprotected Browser (Extension Inactive)';
+      extensionStatus.textContent = '[INACTIVE] Extension Not Loaded';
       extensionStatus.className = 'ext-status-pill inactive';
-      log('Warning: Extension not loaded in this tab. Attacks will not be intercepted unless extension is installed and enabled.', 'warn');
+      log('Notice: Defensive extension not loaded in this tab. Interception inactive.', 'warn');
     }
   }
 

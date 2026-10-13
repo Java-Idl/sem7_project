@@ -2,6 +2,8 @@
  * Defensive Browser Extension - Options & Security Dashboard Controller
  */
 
+import { ThreatEstimator } from '../core/threat-estimator.js';
+
 document.addEventListener('DOMContentLoaded', async () => {
   let devicesDatabase = [];
   let currentConfig = {
@@ -52,7 +54,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const scoreCircle = document.getElementById('scoreCircle');
   const scoreLabel = document.getElementById('scoreLabel');
   const scoreSub = document.getElementById('scoreSub');
-  const threatBreakdown = document.getElementById('threatBreakdown');
+  const threatLevelBadge = document.getElementById('threatLevelBadge');
+  const threatVectorsList = document.getElementById('threatVectorsList');
+  const estimatorEndpointsBody = document.getElementById('estimatorEndpointsBody');
 
   // DOM Elements - Enterprise
   const managedStatusIndicator = document.getElementById('managedStatusIndicator');
@@ -365,86 +369,161 @@ document.addEventListener('DOMContentLoaded', async () => {
     dl.click();
   });
 
-  // 8. Heuristic Threat Estimator (Ported from PeripheralInstinct tool.html)
+  // 8. Heuristic Threat Estimator (Enhanced from PeripheralInstinct tool.html)
+  function extractCollectionHierarchy(col) {
+    if (!col) return null;
+    const result = {
+      usagePage: Number(col.usagePage) || 0,
+      usage: Number(col.usage) || 0,
+      type: Number(col.type) || 0
+    };
+    if (Array.isArray(col.children) && col.children.length > 0) {
+      result.children = col.children.map(extractCollectionHierarchy).filter(Boolean);
+    }
+    if (Array.isArray(col.inputReports) && col.inputReports.length > 0) {
+      result.inputReports = col.inputReports.map(r => ({ reportId: r.reportId, reportSize: r.reportSize || 8 }));
+    }
+    if (Array.isArray(col.outputReports) && col.outputReports.length > 0) {
+      result.outputReports = col.outputReports.map(r => ({ reportId: r.reportId, reportSize: r.reportSize || 8 }));
+    }
+    if (Array.isArray(col.featureReports) && col.featureReports.length > 0) {
+      result.featureReports = col.featureReports.map(r => ({ reportId: r.reportId, reportSize: r.reportSize || 8 }));
+    }
+    return result;
+  }
+
   function evaluateDeviceDescriptor(device) {
-    let score = 0;
-    const factors = [];
-    const collections = device.collections || [];
-
-    // Factor 1: Vendor or Product defined collection (e.g. usagePage >= 0xFF00)
-    const hasVendorPage = collections.some(c => c.usagePage >= 0xFF00);
-    if (hasVendorPage) {
-      score += 35;
-      factors.push({ name: 'Vendor-Defined Usage Page (>= 0xFF00)', desc: 'Device exposes proprietary configuration endpoints.', severity: 'CRITICAL', pts: '+35' });
-    }
-
-    // Factor 2: Device can simulate Keyboard (usagePage 1, usage 6)
-    const hasKeyboard = collections.some(c => c.usagePage === 1 && c.usage === 6);
-    if (hasKeyboard) {
-      score += 25;
-      factors.push({ name: 'Keyboard Interface Present', desc: 'Device can send arbitrary simulated keystrokes to OS.', severity: 'HIGH', pts: '+25' });
-    }
-
-    // Factor 3: Device has Output or Feature reports allowing host-to-device writes
-    let hasWritableReports = false;
-    let totalOutputEndpoints = 0;
-    collections.forEach(c => {
-      if ((c.outputReports && c.outputReports.length > 0) || (c.featureReports && c.featureReports.length > 0)) {
-        hasWritableReports = true;
-        totalOutputEndpoints += (c.outputReports ? c.outputReports.length : 0) + (c.featureReports ? c.featureReports.length : 0);
-      }
-    });
-
-    if (hasWritableReports) {
-      score += 25;
-      factors.push({ name: 'Writable Output/Feature Reports', desc: `Detected ${totalOutputEndpoints} writable reports for sending host commands.`, severity: 'HIGH', pts: '+25' });
-    }
-
-    // Factor 4: Known vulnerable VID in database
-    const dbMatch = devicesDatabase.find(d => d.vendorId === device.vendorId);
-    if (dbMatch) {
-      score += 15;
-      factors.push({ name: 'Known Vulnerable Vendor (Matched Database)', desc: `Vendor matches ${dbMatch.name} protocol family.`, severity: 'MEDIUM', pts: '+15' });
-    }
-
-    score = Math.min(100, score);
-    return { score, factors };
+    const dbMatch = devicesDatabase.find(d => d.vendorId === Number(device?.vendorId));
+    return ThreatEstimator.analyzeDevice(device, dbMatch);
   }
 
   function displayEstimatorResult(assessment) {
+    if (!assessment) return;
     scoreCircle.textContent = assessment.score;
+
     let color = '#10b981';
-    let label = 'Low Threat';
-    if (assessment.score >= 70) {
+    let label = 'SAFE';
+    if (assessment.score >= 80) {
       color = '#ef4444';
-      label = 'CRITICAL Threat';
-    } else if (assessment.score >= 40) {
+      label = 'CRITICAL';
+    } else if (assessment.score >= 60) {
       color = '#f97316';
-      label = 'HIGH Threat';
-    } else if (assessment.score >= 20) {
+      label = 'HIGH';
+    } else if (assessment.score >= 30) {
       color = '#eab308';
-      label = 'MEDIUM Threat';
+      label = 'MEDIUM';
+    } else if (assessment.score >= 10) {
+      color = '#3b82f6';
+      label = 'LOW';
     }
 
     scoreCircle.style.borderColor = color;
     scoreCircle.style.color = color;
-    scoreLabel.textContent = `${assessment.score}/100 - ${label}`;
-    scoreSub.textContent = assessment.score >= 40 ? 'High probability of programmable keystroke macro vulnerability.' : 'Standard input peripheral characteristics.';
+    scoreLabel.textContent = `${assessment.score}/100 Risk Index`;
+    scoreSub.textContent = assessment.summary;
 
-    threatBreakdown.innerHTML = '';
-    assessment.factors.forEach(f => {
-      const item = document.createElement('div');
-      item.className = 'threat-factor';
-      item.innerHTML = `
-        <div>
-          <strong>${escapeHtml(f.name)}</strong>
-          <div class="text-muted" style="font-size: 10px;">${escapeHtml(f.desc)}</div>
+    if (threatLevelBadge) {
+      threatLevelBadge.textContent = label;
+      threatLevelBadge.className = `risk-tag ${label.toLowerCase()}`;
+    }
+
+    threatVectorsList.innerHTML = '';
+    (assessment.vectors || []).forEach(v => {
+      const card = document.createElement('div');
+      card.className = 'threat-vector-card';
+
+      let barColor = '#10b981';
+      if (v.severity === 'CRITICAL') barColor = '#ef4444';
+      else if (v.severity === 'HIGH') barColor = '#f97316';
+      else if (v.severity === 'MEDIUM') barColor = '#eab308';
+      else if (v.severity === 'LOW') barColor = '#3b82f6';
+
+      const pct = Math.min(100, Math.round((v.score / v.max) * 100));
+
+      card.innerHTML = `
+        <div class="vector-header">
+          <span class="vector-title">${escapeHtml(v.name)}</span>
+          <span class="vector-score-val" style="color: ${barColor};">${v.score.toFixed(1)} / ${v.max.toFixed(1)}</span>
         </div>
-        <div style="font-weight: 700; color: ${f.severity === 'CRITICAL' ? '#f87171' : '#fbbf24'};">${f.pts}</div>
+        <div class="vector-progress-bg">
+          <div class="vector-progress-bar" style="width: ${pct}%; background: ${barColor};"></div>
+        </div>
+        <div class="vector-meta-row">
+          <div class="vector-desc">${escapeHtml(v.finding)}</div>
+          <div class="vector-evidence-chip">${escapeHtml(v.evidence)}</div>
+        </div>
       `;
-      threatBreakdown.appendChild(item);
+      threatVectorsList.appendChild(card);
     });
+
+    estimatorEndpointsBody.innerHTML = '';
+    const endpoints = assessment.endpoints || [];
+    if (endpoints.length === 0) {
+      estimatorEndpointsBody.innerHTML = '<tr><td colspan="5" class="text-muted text-center" style="padding: 12px;">No endpoints declared in descriptor collections.</td></tr>';
+    } else {
+      endpoints.forEach(ep => {
+        const tr = document.createElement('tr');
+        const tagClass = (ep.riskLevel || 'LOW').toLowerCase();
+        tr.innerHTML = `
+          <td><code>${escapeHtml(ep.reportId)}</code></td>
+          <td>${escapeHtml(ep.type)}</td>
+          <td><code>${escapeHtml(ep.reportSize)}</code></td>
+          <td style="font-size: 10px; color: #94a3b8;">${escapeHtml(ep.role)}</td>
+          <td><span class="risk-tag ${tagClass}">${escapeHtml(ep.riskLevel)}</span></td>
+        `;
+        estimatorEndpointsBody.appendChild(tr);
+      });
+    }
   }
+
+  const PRESET_DESCRIPTORS = {
+    g502: {
+      vendorId: 1133,
+      productId: 49275,
+      productName: 'Logitech G502 HERO Gaming Mouse',
+      collections: [
+        { usagePage: 65280, usage: 1, outputReports: [{ reportId: 16, reportSize: 8 }, { reportId: 17, reportSize: 20 }], inputReports: [{ reportId: 16, reportSize: 8 }, { reportId: 17, reportSize: 20 }] },
+        { usagePage: 1, usage: 6, inputReports: [{ reportId: 1, reportSize: 8 }] },
+        { usagePage: 1, usage: 2, inputReports: [{ reportId: 2, reportSize: 8 }] }
+      ]
+    },
+    ch57x: {
+      vendorId: 4489,
+      productId: 34960,
+      productName: 'WCH CH57X Macro Keyboard',
+      collections: [
+        { usagePage: 65280, usage: 1, outputReports: [{ reportId: 3, reportSize: 64 }] },
+        { usagePage: 1, usage: 6, inputReports: [{ reportId: 1, reportSize: 8 }] }
+      ]
+    },
+    'office-mouse': {
+      vendorId: 1118,
+      productId: 1860,
+      productName: 'Standard USB Optical Mouse',
+      collections: [
+        { usagePage: 1, usage: 2, inputReports: [{ reportId: 1, reportSize: 8 }] }
+      ]
+    },
+    'office-kb': {
+      vendorId: 1118,
+      productId: 1870,
+      productName: 'Standard Office Keyboard',
+      collections: [
+        { usagePage: 1, usage: 6, inputReports: [{ reportId: 1, reportSize: 8 }], outputReports: [{ reportId: 1, reportSize: 1 }] }
+      ]
+    }
+  };
+
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const presetKey = btn.dataset.preset;
+      if (PRESET_DESCRIPTORS[presetKey]) {
+        const desc = PRESET_DESCRIPTORS[presetKey];
+        mockDescriptorInput.value = JSON.stringify(desc, null, 2);
+        displayEstimatorResult(evaluateDeviceDescriptor(desc));
+      }
+    });
+  });
 
   estimatorAnalyzeBtn.addEventListener('click', () => {
     try {
@@ -465,13 +544,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       const devices = await navigator.hid.requestDevice({ filters: [] });
       if (devices && devices.length > 0) {
         const dev = devices[0];
-        mockDescriptorInput.value = JSON.stringify({
+        const safeCollections = Array.isArray(dev.collections) ? dev.collections.map(extractCollectionHierarchy).filter(Boolean) : [];
+        const descriptorObj = {
           vendorId: dev.vendorId,
           productId: dev.productId,
-          productName: dev.productName,
-          collections: dev.collections || []
-        }, null, 2);
-        const assessment = evaluateDeviceDescriptor(dev);
+          productName: dev.productName || 'Connected Peripheral',
+          collections: safeCollections
+        };
+        mockDescriptorInput.value = JSON.stringify(descriptorObj, null, 2);
+        const assessment = evaluateDeviceDescriptor(descriptorObj);
         displayEstimatorResult(assessment);
       }
     } catch (e) {

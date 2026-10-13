@@ -95,4 +95,29 @@ export function runPolicyTests(assert) {
 
     assert(engine.mode, POLICY_MODES.STRICT, 'Enterprise: Managed enforceStrict should override mode to Strict');
   }
+
+  // 7. Connection Defense Tests (Untrusted Origin WebHID Access)
+  {
+    const engine = new PolicyEngine({
+      mode: POLICY_MODES.BALANCED,
+      originAllowlist: ['https://trusted-site.com']
+    });
+
+    // Untrusted origin requesting Logitech mouse (0x046d) should be BLOCKED
+    const blockedConn = engine.evaluateHIDConnection('https://universal-omm-fake.com', [{ vendorId: 0x046d }]);
+    assert(blockedConn.allowed, false, 'Connection: Untrusted origin requesting Logitech device must be blocked');
+    assert(blockedConn.opType, 'untrusted_connection_blocked', 'Connection: OpType should be untrusted_connection_blocked');
+
+    // Trusted origin requesting Logitech mouse should be ALLOWED
+    const allowedConn = engine.evaluateHIDConnection('https://trusted-site.com', [{ vendorId: 0x046d }]);
+    assert(allowedConn.allowed, true, 'Connection: Allowlisted origin requesting Logitech device must be permitted');
+
+    // Untrusted origin requesting benign device (e.g. non-vulnerable vendor)
+    const benignConn = engine.evaluateHIDConnection('https://other-site.com', [{ vendorId: 0x1234 }]);
+    assert(benignConn.allowed, true, 'Connection: Non-programmable vendor filter should be permitted');
+
+    // Untrusted origin attempting to open vulnerable device
+    const openDec = engine.evaluateHID(mockLogitechClassification, 'open', 0, null, 'https://universal-omm-fake.com');
+    assert(openDec.allowed, false, 'Open: Untrusted origin blocked from opening programmable Logitech mouse');
+  }
 }

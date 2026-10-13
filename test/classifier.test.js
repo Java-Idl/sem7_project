@@ -83,6 +83,37 @@ export function runClassifierTests(assert) {
     assert(assessment.hasVendorPages, true, 'ThreatEstimator: Should detect vendor-defined usage page');
     assert(assessment.hasOutputReports, true, 'ThreatEstimator: Should detect host-to-device output report endpoints');
     assert(assessment.score >= 70, true, 'ThreatEstimator: Threat score must be >= 70 for keystroke injection capable hardware');
+    assert(assessment.score < 100, true, 'ThreatEstimator: Threat score must not default to a flat 100');
+
+    // Office Mouse Test
+    const officeMouse = new MockHIDDevice({
+      vendorId: 0x045e,
+      productId: 0x0745,
+      productName: 'Office Optical Mouse',
+      collections: [{ usagePage: 0x01, usage: 0x02, inputReports: [{ reportId: 1, reportSize: 8 }] }]
+    });
+    const mouseAssessment = ThreatEstimator.analyzeDevice(officeMouse);
+    assert(mouseAssessment.isVulnerable, false, 'ThreatEstimator: Office mouse must not be flagged vulnerable');
+    assert(mouseAssessment.score < 15, true, 'ThreatEstimator: Office mouse threat score must be < 15');
+
+    // Office Keyboard Test (1-byte LED output only)
+    const officeKeyboard = new MockHIDDevice({
+      vendorId: 0x045e,
+      productId: 0x0752,
+      productName: 'Office Keyboard',
+      collections: [
+        {
+          usagePage: 0x01,
+          usage: 0x06,
+          inputReports: [{ reportId: 1, reportSize: 8 }],
+          outputReports: [{ reportId: 1, reportSize: 1 }]
+        }
+      ]
+    });
+    const kbAssessment = ThreatEstimator.analyzeDevice(officeKeyboard);
+    assert(kbAssessment.isVulnerable, false, 'ThreatEstimator: Standard keyboard with LED output only must not be vulnerable');
+    assert(kbAssessment.threatLevel, 'LOW', 'ThreatEstimator: Standard keyboard must be rated LOW risk');
+    assert(kbAssessment.score < 25, true, 'ThreatEstimator: Standard keyboard score must be < 25');
 
     // Heuristic Classification in DeviceClassifier
     const fallbackClass = classifier.classifyHIDDevice(unknownSuspiciousDevice);

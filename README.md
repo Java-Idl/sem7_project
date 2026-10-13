@@ -109,7 +109,7 @@ PeripheralShield contains dedicated protocol parsers modeled after the devices d
 │   ├── parsers.test.js               # Protocol signature unit tests
 │   ├── policy.test.js                # Policy engine & override tests
 │   ├── classifier.test.js            # Classifier & threat estimator tests
-│   └── run-tests.js                  # Test runner (46/46 passing)
+│   └── run-tests.js                  # Test runner (61/61 passing)
 ├── testbed/                          # Interactive exploit verification workbench
 │   ├── index.html                    # Hands-on simulation UI
 │   ├── testbed.css
@@ -165,7 +165,7 @@ Output:
   ✓ Serial: Should block AT+CMGS SMS transmission
   ...
 ===================================================
-ALL TESTS PASSED! (46 assertions in 4ms)
+ALL TESTS PASSED! (61 assertions in 2ms)
 ===================================================
 ```
 

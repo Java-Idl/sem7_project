@@ -65,12 +65,13 @@ export class HIDppParser {
       return { isDangerous: false, opType: 'get_device_name' };
     }
 
-    // Check if the target featureIndex is mapped to 0x8100 (Onboard Memory)
+    // Check if the target featureIndex is mapped
     const mappedFeatureId = knownFeatureIndexes.get(byte1);
+    const functionId = byte2 >> 4;
+
+    // Feature 0x8100 (Onboard Memory / Profiles)
     if (mappedFeatureId === 0x8100) {
-      const functionId = byte2 >> 4;
-      // 0x01 = setOnboardMode, 0x05 = readPage, 0x06 = startTransaction, 0x07 = writeBlock, 0x08 = endTransaction
-      if (functionId === 0x01 || functionId === 0x06 || functionId === 0x07 || functionId === 0x08) {
+      if (functionId === 0x01 || functionId === 0x06 || functionId === 0x07 || functionId === 0x08 || functionId === 0x0c) {
         return {
           isDangerous: true,
           reason: `Dangerous HID++ 2.0 onboard memory modification: functionId 0x0${functionId.toString(16)} (Feature 0x8100)`,
@@ -81,20 +82,86 @@ export class HIDppParser {
       if (functionId === 0x05) {
         return {
           isDangerous: true,
-          reason: 'HID++ 2.0 onboard memory page read (extracting profiles/macros)',
-          opType: 'hidpp2_read_onboard_memory',
+          reason: 'Dangerous HID++ 2.0 onboard macro execution command (Feature 0x8100 Fn 0x05)',
+          opType: 'hidpp2_exec_macro',
           featureId: 0x8100
         };
       }
     }
 
-    // Generic check for direct feature 0x8100 discovery packet
-    // e.g. [0xff, 0x00, 0x0a, 0x81, 0x00, 0x00]
+    // Feature 0x8061 (Special Keys / Button Remapping)
+    if (mappedFeatureId === 0x8061) {
+      if (functionId === 0x01 || functionId === 0x02 || functionId === 0x05) {
+        return {
+          isDangerous: true,
+          reason: `Dangerous HID++ 2.0 button remapping attempt: functionId 0x0${functionId.toString(16)} (Feature 0x8061)`,
+          opType: 'hidpp2_button_remapping',
+          featureId: 0x8061
+        };
+      }
+    }
+
+    // Feature 0x8110 (Button Spy / Click Sniffing)
+    if (mappedFeatureId === 0x8110) {
+      if (functionId === 0x01) {
+        return {
+          isDangerous: true,
+          reason: 'Dangerous HID++ 2.0 Button Spy broadcast activation (Feature 0x8110 Fn 0x01)',
+          opType: 'hidpp2_button_spy_activate',
+          featureId: 0x8110
+        };
+      }
+    }
+
+    // Generic check for direct feature discovery packets
+    // Feature 0x8100: [0xff, 0x00, 0x0a, 0x81, 0x00]
     if (data[3] === 0x81 && data[4] === 0x00) {
       return {
         isDangerous: false,
         opType: 'query_feature_0x8100_index',
         notes: 'Host is discovering feature index for Onboard Memory (0x8100)'
+      };
+    }
+    // Feature 0x8061: [0xff, 0x00, 0x0a, 0x80, 0x61]
+    if (data[3] === 0x80 && data[4] === 0x61) {
+      return {
+        isDangerous: false,
+        opType: 'query_feature_0x8061_index',
+        notes: 'Host is discovering feature index for Button Remapping (0x8061)'
+      };
+    }
+    // Feature 0x8110: [0xff, 0x00, 0x0a, 0x81, 0x10]
+    if (data[3] === 0x81 && data[4] === 0x10) {
+      return {
+        isDangerous: false,
+        opType: 'query_feature_0x8110_index',
+        notes: 'Host is discovering feature index for Button Spy (0x8110)'
+      };
+    }
+
+    // Heuristic signature fallback for unmapped/guessed feature indices:
+    // Sector prepare wire pattern: Report 0x11, function 0x06 with length boundary 0xFF at byte 7
+    if ((reportId === 0x11 || reportId === 17) && functionId === 0x06 && data.length >= 8 && data[3] === 0x00 && data[7] === 0xff) {
+      return {
+        isDangerous: true,
+        reason: 'Heuristic Match: Unmapped HID++ 2.0 sector prepare write transaction detected (Function 0x06)',
+        opType: 'heuristic_hidpp2_sector_prepare'
+      };
+    }
+    // Sector write block: Report 0x11, function 0x07 (16-byte transfer chunks)
+    if ((reportId === 0x11 || reportId === 17) && functionId === 0x07 && data.length >= 19) {
+      return {
+        isDangerous: true,
+        reason: 'Heuristic Match: Unmapped HID++ 2.0 sector chunk write detected (Function 0x07)',
+        opType: 'heuristic_hidpp2_sector_write'
+      };
+    }
+    // Sector finalize: function 0x08
+    if (functionId === 0x08 && data.length >= 3 && data[1] > 0x03) {
+      return {
+        isDangerous: true,
+        reason: 'Heuristic Match: Unmapped HID++ 2.0 sector write finalize detected (Function 0x08)',
+        opType: 'heuristic_hidpp2_sector_finalize'
       };
     }
 

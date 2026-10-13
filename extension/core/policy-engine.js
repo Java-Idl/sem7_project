@@ -55,6 +55,93 @@ export class PolicyEngine {
   }
 
   /**
+   * Evaluates a device connection request (navigator.hid.requestDevice).
+   * Defends against untrusted origins requesting high-risk programmable hardware.
+   * @param {string} origin - window.location.origin
+   * @param {Array<object>} filters - HID device filters passed to requestDevice
+   * @returns {{ allowed: boolean, reason: string, opType: string, riskLevel: string, shouldNotify: boolean }}
+   */
+  evaluateHIDConnection(origin = '', filters = []) {
+    // 1. Check Origin Allowlist
+    if (origin && this.originAllowlist.has(origin)) {
+      return {
+        allowed: true,
+        reason: `Origin '${origin}' is explicitly trusted in user allowlist`,
+        opType: 'origin_allowlisted',
+        riskLevel: 'LOW',
+        shouldNotify: false
+      };
+    }
+
+    // 2. Strict Mode blocks all device requests
+    if (this.mode === POLICY_MODES.STRICT) {
+      return {
+        allowed: false,
+        reason: `Strict Mode active: Blocked WebHID requestDevice() from ${origin}`,
+        opType: 'strict_mode_block_connection',
+        riskLevel: 'CRITICAL',
+        shouldNotify: true
+      };
+    }
+
+    // 3. Permissive Mode allows all for audit logging
+    if (this.mode === POLICY_MODES.PERMISSIVE) {
+      return {
+        allowed: true,
+        reason: 'Permissive Mode: Device request permitted for audit monitoring',
+        opType: 'permissive_connection_allowed',
+        riskLevel: 'LOW',
+        shouldNotify: false
+      };
+    }
+
+    // 4. Balanced Mode: Check if requested filters target vulnerable programmable peripherals
+    const vulnerableVendors = new Set([
+      1133, 0x046d,  // Logitech
+      4489, 0x1189,  // WCH CH57x
+      12538, 0x30fa, // Zelotes
+      13651, 0x3553, // FootSwitch
+      7805, 0x1e7d,  // Roccat
+      9610, 0x258a   // Redragon
+    ]);
+
+    let targetsVulnerable = false;
+    let targetName = 'Programmable Peripheral';
+
+    if (!Array.isArray(filters) || filters.length === 0) {
+      targetsVulnerable = true;
+      targetName = 'All Connected Peripherals (Unfiltered Request)';
+    } else {
+      for (const f of filters) {
+        if (f && vulnerableVendors.has(f.vendorId)) {
+          targetsVulnerable = true;
+          if (f.vendorId === 1133 || f.vendorId === 0x046d) targetName = 'Logitech Gaming Peripheral';
+          else if (f.vendorId === 4489 || f.vendorId === 0x1189) targetName = 'CH57X Macro Hardware';
+          break;
+        }
+      }
+    }
+
+    if (targetsVulnerable) {
+      return {
+        allowed: false,
+        reason: `Untrusted origin '${origin}' blocked from acquiring ${targetName}`,
+        opType: 'untrusted_connection_blocked',
+        riskLevel: 'CRITICAL',
+        shouldNotify: true
+      };
+    }
+
+    return {
+      allowed: true,
+      reason: 'Device filters do not target known programmable hardware',
+      opType: 'benign_connection_allowed',
+      riskLevel: 'LOW',
+      shouldNotify: false
+    };
+  }
+
+  /**
    * Registers a discovered HID feature index for a device (e.g. 0x8100 mapped to index 7).
    * @param {number} featureIndex
    * @param {number} featureId
@@ -146,7 +233,30 @@ export class PolicyEngine {
       };
     }
 
-    // 5. Evaluate Protocol-Specific Commands in BALANCED or PERMISSIVE
+    // 5. Handle device.open() gating
+    if (method === 'open') {
+      if (this.mode === POLICY_MODES.BALANCED) {
+        const isVulnerable = vid === 1133 || vid === 0x046d || vid === 4489 || vid === 0x1189 || vid === 12538 || vid === 0x30fa || vid === 13651 || vid === 0x3553 || riskLevel === 'CRITICAL';
+        if (isVulnerable && origin && !this.originAllowlist.has(origin)) {
+          return {
+            allowed: false,
+            reason: `Untrusted origin '${origin}' blocked from opening programmable peripheral (${devName})`,
+            opType: 'untrusted_device_open_blocked',
+            riskLevel: 'CRITICAL',
+            shouldNotify: true
+          };
+        }
+      }
+      return {
+        allowed: true,
+        reason: 'Device open permitted',
+        opType: 'open_allowed',
+        riskLevel: 'LOW',
+        shouldNotify: false
+      };
+    }
+
+    // 6. Evaluate Protocol-Specific Commands in BALANCED or PERMISSIVE
     let parserVerdict = { isDangerous: false, opType: 'safe' };
 
     // A. Logitech HID++

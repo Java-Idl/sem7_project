@@ -18,8 +18,10 @@
       "description": "Contains onboard non-volatile memory pages reprogrammable via WebHID to execute arbitrary macro keystrokes without user awareness.",
       "dangerousOperations": [
         "HID++ Onboard Memory Feature (0x8100) manipulation",
-        "Writing memory pages (writePage, functionId 0x06, 0x07, 0x08)",
-        "Overwriting button bindings with keyboard scancode sequences",
+        "Writing memory pages (writePage, functionId 0x06, 0x07, 0x08, 0x0c)",
+        "Direct macro execution (execMacro, functionId 0x05)",
+        "Button remapping & keystroke binding (Feature 0x8061, functionId 0x01, 0x02)",
+        "Button Spy physical click sniffing (Feature 0x8110, functionId 0x01)",
         "Firmware update functions (0x0003, 0x0005, 0x0007)"
       ],
       "safeOperations": [
@@ -36,6 +38,22 @@
           "featureId": 33024,
           "featureIdHex": "0x8100",
           "rule": "block_onboard_memory"
+        },
+        {
+          "reportId": 16,
+          "direction": "out",
+          "matchByteIndices": [1],
+          "featureId": 32865,
+          "featureIdHex": "0x8061",
+          "rule": "block_button_remapping"
+        },
+        {
+          "reportId": 16,
+          "direction": "out",
+          "matchByteIndices": [1],
+          "featureId": 33040,
+          "featureIdHex": "0x8110",
+          "rule": "block_button_spy"
         }
       ]
     },

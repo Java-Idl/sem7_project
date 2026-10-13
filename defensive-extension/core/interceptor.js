@@ -121,20 +121,18 @@
       `);
 
       toast.innerHTML = `
-        <div style="display: flex; align-items: flex-start; gap: 12px;">
-          <div style="background: ${riskLevel === 'CRITICAL' ? '#ef444422' : '#f59e0b22'}; color: ${riskLevel === 'CRITICAL' ? '#ef4444' : '#f59e0b'}; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold; flex-shrink: 0;">!</div>
-          <div style="flex: 1;">
-            <div style="font-weight: 700; font-size: 14px; margin-bottom: 2px; color: #fff;">Peripheral Exploit Blocked</div>
-            <div style="color: #9ca3af; font-size: 12px; margin-bottom: 6px;">
-              <span style="color: #e5e7eb; font-weight: 600;">${deviceName}</span> &bull; <span>${operation}</span>
+        <div style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1f2937; padding-bottom: 6px; margin-bottom: 8px;">
+            <div style="font-weight: 700; letter-spacing: 0.05em; color: ${riskLevel === 'CRITICAL' ? '#f87171' : '#fbbf24'};">
+              [SECURITY INTERCEPTION] ${riskLevel}
             </div>
-            <div style="background: #1f2937; padding: 8px 10px; border-radius: 6px; color: #f3f4f6; margin-bottom: 8px; font-size: 12px;">
-              ${reason}
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; background: ${riskLevel === 'CRITICAL' ? '#ef4444' : '#f59e0b'}; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: 700;">${riskLevel} RISK</span>
-              <button id="defExtToastClose" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 12px; padding: 4px;">Dismiss</button>
-            </div>
+            <button id="defExtToastClose" style="background: none; border: 1px solid #374151; color: #9ca3af; border-radius: 3px; font-size: 10px; padding: 1px 6px; cursor: pointer;">Dismiss</button>
+          </div>
+          <div style="color: #e5e7eb; margin-bottom: 4px;">
+            <strong>Target:</strong> ${deviceName} (${operation})
+          </div>
+          <div style="color: #9ca3af; line-height: 1.4; background: #0b0f19; padding: 6px 8px; border-radius: 4px; border: 1px solid #1f2937;">
+            ${reason}
           </div>
         </div>
       `;
@@ -217,17 +215,79 @@
         };
       }
 
-      // HID++ 2.0 Feature 0x8100 (Onboard Memory)
-      const mappedFeature = state.knownFeatureIndexes.get(data[1]);
+      // Check dynamic feature index via device registry or global state
+      const record = getDeviceRecord(device);
+      const mappedFeature = record.knownFeatureIndexes.get(data[1]) || state.knownFeatureIndexes.get(data[1]);
+      const functionId = data[2] >> 4;
+
+      // HID++ 2.0 Feature 0x8100 (Onboard Memory / Profiles)
       if (mappedFeature === 0x8100) {
-        const functionId = data[2] >> 4;
-        if (functionId === 0x01 || functionId === 0x06 || functionId === 0x07 || functionId === 0x08) {
+        if (functionId === 0x01 || functionId === 0x06 || functionId === 0x07 || functionId === 0x08 || functionId === 0x0c) {
           return {
             isDangerous: true,
             reason: `Blocked HID++ Onboard Memory write (Feature 0x8100, function 0x0${functionId.toString(16)})`,
             opType: 'hidpp_onboard_memory_write'
           };
         }
+        if (functionId === 0x05) {
+          return {
+            isDangerous: true,
+            reason: 'Blocked HID++ Onboard Macro execution command (Feature 0x8100, function 0x05)',
+            opType: 'hidpp_macro_execution'
+          };
+        }
+      }
+
+      // HID++ 2.0 Feature 0x8061 (Special Keys / Button Remapping)
+      if (mappedFeature === 0x8061) {
+        if (functionId === 0x01 || functionId === 0x02 || functionId === 0x05) {
+          return {
+            isDangerous: true,
+            reason: `Blocked HID++ Button Remapping modification (Feature 0x8061, function 0x0${functionId.toString(16)})`,
+            opType: 'hidpp_button_remapping'
+          };
+        }
+      }
+
+      // HID++ 2.0 Feature 0x8110 (Button Spy / Click Sniffing)
+      if (mappedFeature === 0x8110) {
+        if (functionId === 0x01) {
+          return {
+            isDangerous: true,
+            reason: 'Blocked HID++ Button Spy click sniffing activation (Feature 0x8110, function 0x01)',
+            opType: 'hidpp_button_spy_activate'
+          };
+        }
+      }
+
+      // Heuristic signatures for unmapped/guessed feature indices
+      if ((reportId === 0x11 || reportId === 17) && functionId === 0x06 && data.length >= 8 && data[3] === 0x00 && data[7] === 0xff) {
+        return {
+          isDangerous: true,
+          reason: 'Heuristic Block: Detected HID++ 2.0 sector prepare write transaction pattern',
+          opType: 'heuristic_hidpp2_sector_prepare'
+        };
+      }
+      if ((reportId === 0x11 || reportId === 17) && functionId === 0x07 && data.length >= 19) {
+        return {
+          isDangerous: true,
+          reason: 'Heuristic Block: Detected HID++ 2.0 sector chunk write pattern',
+          opType: 'heuristic_hidpp2_sector_write'
+        };
+      }
+      if (functionId === 0x08 && data.length >= 3 && data[1] > 0x03) {
+        return {
+          isDangerous: true,
+          reason: 'Heuristic Block: Detected HID++ 2.0 sector write finalize pattern',
+          opType: 'heuristic_hidpp2_sector_finalize'
+        };
+      }
+      if (functionId === 0x05 && data.length >= 6 && data[1] > 0x03) {
+        return {
+          isDangerous: true,
+          reason: 'Heuristic Block: Detected HID++ 2.0 direct macro execution trigger pattern',
+          opType: 'heuristic_hidpp2_macro_run'
+        };
       }
 
       // HID++ 1.0 writeMemory (subId 0x90, 0x91)
@@ -391,6 +451,98 @@
   // 3. API WRAPPING & PROXYING
   // =========================================================================
 
+  // --- Vulnerable Peripheral Detection & Connection Defense ---
+  function isVulnerableVendor(vid) {
+    return vid === 0x046d || vid === 1133 ||   // Logitech
+           vid === 0x1189 || vid === 4489 ||   // WCH CH57x
+           vid === 0x30fa || vid === 12538 ||  // Zelotes
+           vid === 0x3553 || vid === 13651 ||  // FootSwitch
+           vid === 0x1e7d || vid === 7805 ||   // Roccat
+           vid === 0x258a || vid === 9610;     // Redragon
+  }
+
+  function inspectHIDConnection(options) {
+    const origin = window.location.origin;
+    if (state.originAllowlist.includes(origin)) {
+      return { isDangerous: false };
+    }
+    if (state.mode === 'Permissive') {
+      return { isDangerous: false };
+    }
+
+    const filters = options && Array.isArray(options.filters) ? options.filters : [];
+    let targetsVulnerable = false;
+    let targetName = 'Programmable Peripheral';
+
+    if (filters.length === 0) {
+      targetsVulnerable = true;
+      targetName = 'All Connected Peripherals (Unfiltered Request)';
+    } else {
+      for (const f of filters) {
+        if (f && isVulnerableVendor(f.vendorId)) {
+          targetsVulnerable = true;
+          if (f.vendorId === 0x046d || f.vendorId === 1133) targetName = 'Logitech Gaming Peripheral';
+          else if (f.vendorId === 0x1189 || f.vendorId === 4489) targetName = 'CH57X Macro Hardware';
+          break;
+        }
+      }
+    }
+
+    if (targetsVulnerable) {
+      return {
+        isDangerous: true,
+        reason: `Blocked untrusted origin '${origin}' from requesting access to ${targetName}`,
+        opType: 'untrusted_connection_blocked'
+      };
+    }
+
+    return { isDangerous: false };
+  }
+
+  // Multi-collection TLC Shared State Registry
+  const deviceRegistry = new _Map();
+  function getDeviceRecord(dev) {
+    const vid = dev ? dev.vendorId : 0;
+    const pid = dev ? dev.productId : 0;
+    const key = `${vid}:${pid}`;
+    if (!deviceRegistry.has(key)) {
+      deviceRegistry.set(key, {
+        knownFeatureIndexes: new _Map(),
+        pendingQueries: new _Map(), // swId -> featureId
+        devices: new _Set()
+      });
+    }
+    const record = deviceRegistry.get(key);
+    if (dev) record.devices.add(dev);
+    return record;
+  }
+
+  function sniffInputReport(device, event) {
+    try {
+      if (!event || !event.data) return;
+      const record = getDeviceRecord(device);
+      const u8 = new _Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength);
+      if (u8.length < 4) return;
+
+      const devIdx = u8[0];
+      const featIdx = u8[1];
+      const fnSw = u8[2];
+      const fnId = (fnSw >> 4) & 0x0F;
+      const swId = fnSw & 0x0F;
+
+      // Root feature (0x00) response to GetFeature(featureId)
+      if (featIdx === 0x00 && fnId === 0x00) {
+        const runtimeIdx = u8[3];
+        const queriedFeatId = record.pendingQueries.get(swId);
+        if (runtimeIdx !== 0 && queriedFeatId) {
+          record.knownFeatureIndexes.set(runtimeIdx, queriedFeatId);
+          state.knownFeatureIndexes.set(runtimeIdx, queriedFeatId);
+          console.log(`[DEFENSIVE EXTENSION] Synchronized Feature 0x${queriedFeatId.toString(16)} -> Runtime Index 0x${runtimeIdx.toString(16)} across all collections for ${device.productName || 'Device'}`);
+        }
+      }
+    } catch (e) {}
+  }
+
   // --- WebHID Interception ---
   if (window.navigator && window.navigator.hid) {
     const origRequestDevice = window.navigator.hid.requestDevice;
@@ -402,6 +554,7 @@
       const deviceName = device.productName || 'HID Device';
       const vid = device.vendorId;
       const pid = device.productId;
+      const record = getDeviceRecord(device);
 
       // Wrap sendReport
       const origSendReport = device.sendReport;
@@ -426,23 +579,11 @@
           return _Promise.resolve(); // Drop silently or resolve to prevent script crash
         }
 
-        // Sniff feature index discoveries (e.g. Host querying feature 0x8100 index)
-        if (reportId === 0x10 && u8[3] === 0x81 && u8[4] === 0x00) {
-          // Listen to response on input report to discover mapped index
-          const prevHandler = device.oninputreport;
-          device.oninputreport = function (event) {
-            try {
-              const res = new _Uint8Array(event.data.buffer);
-              const idx = res[3];
-              if (idx !== undefined && idx !== 0) {
-                state.knownFeatureIndexes.set(idx, 0x8100);
-                console.log(`[DEFENSIVE EXTENSION] Monitored Logitech Onboard Memory feature index: ${idx}`);
-              }
-            } catch (e) {}
-            if (typeof prevHandler === 'function') {
-              _apply.call(prevHandler, this, arguments);
-            }
-          };
+        // Track Root feature queries (GetFeature)
+        if (u8.length >= 5 && u8[1] === 0x00 && ((u8[2] >> 4) === 0x00)) {
+          const swId = u8[2] & 0x0F;
+          const requestedFeatId = (u8[3] << 8) | (u8[4] || 0);
+          record.pendingQueries.set(swId, requestedFeatId);
         }
 
         return _apply.call(origSendReport, this, arguments);
@@ -474,9 +615,28 @@
         return _apply.call(origSendFeatureReport, this, arguments);
       };
 
-      // Wrap open to ensure protected state
+      // Wrap open to ensure connection protection
       const origOpen = device.open;
       device.open = async function () {
+        const origin = window.location.origin;
+        if (!state.originAllowlist.includes(origin) && state.mode !== 'Permissive') {
+          if (isVulnerableVendor(vid) || state.mode === 'Strict') {
+            const reason = `Blocked untrusted origin '${origin}' from opening programmable device ${deviceName}`;
+            state.blockedCount++;
+            reportEvent('OPERATION_BLOCKED', {
+              device: deviceName,
+              vendorId: vid,
+              productId: pid,
+              method: 'open',
+              reason,
+              opType: 'untrusted_device_open_blocked',
+              riskLevel: 'CRITICAL'
+            });
+            showBlockedNotification(deviceName, 'device.open()', reason, 'CRITICAL');
+            throw new DOMException(reason, 'SecurityError');
+          }
+        }
+
         reportEvent('DEVICE_CONNECTED', {
           device: deviceName,
           vendorId: vid,
@@ -486,16 +646,61 @@
         return _apply.call(origOpen, this, arguments);
       };
 
+      // Hook addEventListener for inputreport across collections
+      const origAddEventListener = device.addEventListener;
+      if (origAddEventListener) {
+        device.addEventListener = function (type, listener, options) {
+          if (type === 'inputreport') {
+            const wrappedListener = function (event) {
+              sniffInputReport(device, event);
+              if (typeof listener === 'function') {
+                return _apply.call(listener, this, arguments);
+              } else if (listener && typeof listener.handleEvent === 'function') {
+                return listener.handleEvent(event);
+              }
+            };
+            return _apply.call(origAddEventListener, this, [type, wrappedListener, options]);
+          }
+          return _apply.call(origAddEventListener, this, arguments);
+        };
+      }
+
+      // Ensure internal sniffer runs on this device collection
+      try {
+        if (origAddEventListener) {
+          _apply.call(origAddEventListener, device, ['inputreport', function (event) {
+            sniffInputReport(device, event);
+          }]);
+        }
+      } catch (e) {}
+
       // Mark wrapped and lock device methods
       lockProperty(device, '__DEFENSIVE_WRAPPED__', true);
       lockProperty(device, 'sendReport', device.sendReport);
       lockProperty(device, 'sendFeatureReport', device.sendFeatureReport);
       lockProperty(device, 'open', device.open);
+      if (origAddEventListener) {
+        lockProperty(device, 'addEventListener', device.addEventListener);
+      }
 
       return device;
     };
 
-    window.navigator.hid.requestDevice = async function () {
+    window.navigator.hid.requestDevice = async function (options) {
+      const connVerdict = inspectHIDConnection(options);
+      if (connVerdict.isDangerous) {
+        state.blockedCount++;
+        reportEvent('OPERATION_BLOCKED', {
+          device: 'WebHID Peripheral',
+          method: 'requestDevice',
+          reason: connVerdict.reason,
+          opType: connVerdict.opType,
+          riskLevel: 'CRITICAL'
+        });
+        showBlockedNotification('WebHID Connection Request', 'navigator.hid.requestDevice()', connVerdict.reason, 'CRITICAL');
+        throw new DOMException(connVerdict.reason, 'SecurityError');
+      }
+
       const devices = await _apply.call(origRequestDevice, this, arguments);
       return Array.isArray(devices) ? devices.map(wrapDevice) : devices;
     };
